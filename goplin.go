@@ -57,8 +57,7 @@ func New(apiToken string) (*Client, error) {
 	// Use C() to create a client and set with chainable client settings.
 	client := req.C().
 		SetUserAgent("goplin").
-		SetTimeout(5 * time.Second).
-		DevMode()
+		SetTimeout(5 * time.Second)
 
 	newClient := Client{
 		handle:   client,
@@ -235,7 +234,7 @@ func (c *Client) GetTag(id string) (Tag, error) {
 	return tag, err
 }
 
-func (c *Client) GetNotesByTag(id string, orderBy string, orderDir string) ([]Note, error) {
+func (c *Client) GetNote(id string, orderBy string, orderDir string) ([]Note, error) {
 	var result notesResult
 	var notes []Note
 
@@ -262,6 +261,66 @@ func (c *Client) GetNotesByTag(id string, orderBy string, orderDir string) ([]No
 			SetResult(&result).
 			SetError(&result).
 			Get(fmt.Sprintf("http://localhost:%d/tags/{id}/notes", c.port))
+		if err != nil {
+			return notes, err
+		}
+
+		if resp.IsError() {
+			// handle response.
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+			return notes, err
+		}
+
+		if resp.IsSuccess() {
+			for _, note := range result.Notes {
+				notes = append(notes, note)
+			}
+
+			if result.HasMore {
+				page++
+
+				queryParams["page"] = strconv.Itoa(page)
+
+				continue
+			} else {
+				return notes, nil
+			}
+		}
+
+		// handle response.
+		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+		return notes, err
+	}
+}
+
+func (c *Client) GetNotes(orderBy string, orderDir string) ([]Note, error) {
+	var result notesResult
+	var notes []Note
+
+	page := 1
+
+	queryParams := map[string]string{
+		"token":  c.apiToken,
+		"fields": "id,parent_id,title",
+		"page":   strconv.Itoa(page),
+	}
+
+	if len(orderBy) != 0 {
+		queryParams["order_by"] = orderBy
+	}
+
+	if len(orderDir) != 0 {
+		queryParams["order_dir"] = strings.ToUpper(orderDir)
+	}
+
+	for {
+		resp, err := c.handle.R().
+			SetQueryParams(queryParams).
+			SetResult(&result).
+			SetError(&result).
+			Get(fmt.Sprintf("http://localhost:%d/notes", c.port))
 		if err != nil {
 			return notes, err
 		}

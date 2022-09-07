@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/alecthomas/kong"
+	"github.com/imroc/req/v3"
 	"github.com/piccobit/goplin"
 	"github.com/spf13/viper"
 )
@@ -15,14 +16,14 @@ type Context struct {
 	Debug bool
 }
 
-type TagsListCmd struct {
-	ID       string `arg:"" optional:"" name:"id" help:"List tag with specified ID"`
+type ListTagsCmd struct {
+	ID       string `arg:"" optional:"" name:"id" help:"Tags tag with specified ID"`
 	OrderBy  string `name:"order-by" help:"order by specified field"`
 	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
 }
 
-type TagsNotesCmd struct {
-	ID       string `arg:"" optional:"" name:"id" help:"List notes with specified tag"`
+type ListNotesCmd struct {
+	ID       string `arg:"" optional:"" name:"id" help:"Tags notes with specified tag"`
 	OrderBy  string `name:"order-by" help:"order by specified field"`
 	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
 }
@@ -52,19 +53,24 @@ func getItemTypes() []string {
 var cli struct {
 	Debug bool `help:"Enable debug mode."`
 
-	Tags struct {
-		List  TagsListCmd  `cmd:"" requires:"" help:"List Joplin tags"`
-		Notes TagsNotesCmd `cmd:"" requires:"" help:"List notes with Joplin tag"`
-	} `cmd:"" help:"Joplin tag commands"`
+	List struct {
+		Tags  ListTagsCmd  `cmd:"" requires:"" help:"List Joplin tags"`
+		Notes ListNotesCmd `cmd:"" requires:"" help:"List notes for specified Joplin tag"`
+	} `cmd:"" help:"Joplin list commands"`
 }
 
 var (
 	client *goplin.Client
 )
 
-func (t *TagsListCmd) Run(ctx *Context) error {
-	if len(t.ID) == 0 {
-		tags, err := client.GetTags(t.OrderBy, t.OrderDir)
+func (ltc *ListTagsCmd) Run(ctx *Context) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	if len(ltc.ID) == 0 {
+		tags, err := client.GetTags(ltc.OrderBy, ltc.OrderDir)
 		if err != nil {
 			return err
 		}
@@ -76,7 +82,7 @@ func (t *TagsListCmd) Run(ctx *Context) error {
 				tag.ID, tag.ParentID, tag.Title)
 		}
 	} else {
-		tag, err := client.GetTag(t.ID)
+		tag, err := client.GetTag(ltc.ID)
 		if err != nil {
 			return err
 		}
@@ -90,17 +96,36 @@ func (t *TagsListCmd) Run(ctx *Context) error {
 	return nil
 }
 
-func (t *TagsNotesCmd) Run(ctx *Context) error {
-	notes, err := client.GetNotesByTag(t.ID, t.OrderBy, t.OrderDir)
-	if err != nil {
-		return err
+func (lnc *ListNotesCmd) Run(ctx *Context) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
 	}
 
-	fmt.Println("Notes:")
+	if len(lnc.ID) != 0 {
+		notes, err := client.GetNote(lnc.ID, lnc.OrderBy, lnc.OrderDir)
+		if err != nil {
+			return err
+		}
 
-	for _, note := range notes {
-		fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
-			note.ID, note.ParentID, note.Title)
+		fmt.Println("Notes:")
+
+		for _, note := range notes {
+			fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
+				note.ID, note.ParentID, note.Title)
+		}
+	} else {
+		notes, err := client.GetNotes(lnc.OrderBy, lnc.OrderDir)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Notes:")
+
+		for _, note := range notes {
+			fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
+				note.ID, note.ParentID, note.Title)
+		}
 	}
 
 	return nil

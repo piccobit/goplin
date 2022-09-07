@@ -21,6 +21,12 @@ type TagsListCmd struct {
 	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
 }
 
+type TagsNotesCmd struct {
+	ID       string `arg:"" optional:"" name:"id" help:"List notes with specified tag"`
+	OrderBy  string `name:"order-by" help:"order by specified field"`
+	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
+}
+
 func getItemTypes() []string {
 	return []string{
 		"unknown",
@@ -47,7 +53,8 @@ var cli struct {
 	Debug bool `help:"Enable debug mode."`
 
 	Tags struct {
-		List TagsListCmd `cmd:"" requires:"" help:"List Joplin tags"`
+		List  TagsListCmd  `cmd:"" requires:"" help:"List Joplin tags"`
+		Notes TagsNotesCmd `cmd:"" requires:"" help:"List notes with Joplin tag"`
 	} `cmd:"" help:"Joplin tag commands"`
 }
 
@@ -78,6 +85,22 @@ func (t *TagsListCmd) Run(ctx *Context) error {
 
 		fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
 			tag.ID, tag.ParentID, tag.Title)
+	}
+
+	return nil
+}
+
+func (t *TagsNotesCmd) Run(ctx *Context) error {
+	notes, err := client.GetNotesByTag(t.ID, t.OrderBy, t.OrderDir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Notes:")
+
+	for _, note := range notes {
+		fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
+			note.ID, note.ParentID, note.Title)
 	}
 
 	return nil

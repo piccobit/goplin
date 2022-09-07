@@ -25,9 +25,21 @@ type Tag struct {
 	Type     int    `json:"type_,omitempty"`
 }
 
-type itemsResult struct {
+type Note struct {
+	ID       string `json:"id"`
+	ParentID string `json:"parent_id"`
+	Title    string `json:"title"`
+	Type     int    `json:"type_,omitempty"`
+}
+
+type tagsResult struct {
 	Items   []Tag `json:"items"`
 	HasMore bool  `json:"has_more"`
+}
+
+type notesResult struct {
+	Notes   []Note `json:"items"`
+	HasMore bool   `json:"has_more"`
 }
 
 const (
@@ -222,8 +234,70 @@ func (c *Client) GetTag(id string) (Tag, error) {
 
 	return tag, err
 }
+
+func (c *Client) GetNotesByTag(id string, orderBy string, orderDir string) ([]Note, error) {
+	var result notesResult
+	var notes []Note
+
+	page := 1
+
+	queryParams := map[string]string{
+		"token":  c.apiToken,
+		"fields": "id,parent_id,title",
+		"page":   strconv.Itoa(page),
+	}
+
+	if len(orderBy) != 0 {
+		queryParams["order_by"] = orderBy
+	}
+
+	if len(orderDir) != 0 {
+		queryParams["order_dir"] = strings.ToUpper(orderDir)
+	}
+
+	for {
+		resp, err := c.handle.R().
+			SetPathParam("id", id).
+			SetQueryParams(queryParams).
+			SetResult(&result).
+			SetError(&result).
+			Get(fmt.Sprintf("http://localhost:%d/tags/{id}/notes", c.port))
+		if err != nil {
+			return notes, err
+		}
+
+		if resp.IsError() {
+			// handle response.
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+			return notes, err
+		}
+
+		if resp.IsSuccess() {
+			for _, note := range result.Notes {
+				notes = append(notes, note)
+			}
+
+			if result.HasMore {
+				page++
+
+				queryParams["page"] = strconv.Itoa(page)
+
+				continue
+			} else {
+				return notes, nil
+			}
+		}
+
+		// handle response.
+		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+		return notes, err
+	}
+}
+
 func (c *Client) GetTags(orderBy string, orderDir string) ([]Tag, error) {
-	var result itemsResult
+	var result tagsResult
 	var tags []Tag
 
 	page := 1

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/imroc/req/v3"
@@ -21,6 +22,12 @@ type Tag struct {
 	ID       string `json:"id"`
 	ParentID string `json:"parent_id"`
 	Title    string `json:"title"`
+	Type     int    `json:"type_,omitempty"`
+}
+
+type itemsResult struct {
+	Items   []Tag `json:"items"`
+	HasMore bool  `json:"has_more"`
 }
 
 const (
@@ -28,11 +35,6 @@ const (
 	joplinMaxPortNum   = 41194
 	retriesGetApiToken = 20
 )
-
-var result struct {
-	Items   []Tag `json:"items"`
-	HasMore bool  `json:"has_more"`
-}
 
 func New(apiToken string) (*Client, error) {
 	var retErr error
@@ -191,18 +193,61 @@ func (c *Client) getApiToken(authToken string) (string, error) {
 	return "", retErr
 }
 
-func (c *Client) GetTags() ([]Tag, error) {
+func (c *Client) GetTag(id string) (Tag, error) {
+	var tag Tag
+
+	resp, err := c.handle.R().
+		SetPathParam("id", id).
+		SetQueryParam("token", c.apiToken).
+		SetResult(&tag).
+		SetError(&tag).
+		Get(fmt.Sprintf("http://localhost:%d/tags/{id}", c.port))
+	if err != nil {
+		return tag, err
+	}
+
+	if resp.IsError() {
+		// handle response.
+		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+		return tag, err
+	}
+
+	if resp.IsSuccess() {
+		return tag, nil
+	}
+
+	// handle response.
+	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+	return tag, err
+}
+func (c *Client) GetTags(orderBy string, orderDir string) ([]Tag, error) {
+	var result itemsResult
 	var tags []Tag
 
 	page := 1
 
+	queryParams := map[string]string{
+		"token":  c.apiToken,
+		"fields": "id,parent_id,title",
+		"page":   strconv.Itoa(page),
+	}
+
+	if len(orderBy) != 0 {
+		queryParams["order_by"] = orderBy
+	}
+
+	if len(orderDir) != 0 {
+		queryParams["order_dir"] = strings.ToUpper(orderDir)
+	}
+
 	for {
 		resp, err := c.handle.R().
-			SetQueryParam("token", c.apiToken).
-			SetQueryParam("page", strconv.Itoa(page)).
+			SetQueryParams(queryParams).
 			SetResult(&result).
 			SetError(&result).
-			Get(fmt.Sprintf("http://localhost:%d/tags", c.port))
+			Get(fmt.Sprintf("http://localhost:%d/tags/", c.port))
 		if err != nil {
 			return tags, err
 		}
@@ -221,6 +266,8 @@ func (c *Client) GetTags() ([]Tag, error) {
 
 			if result.HasMore {
 				page++
+
+				queryParams["page"] = strconv.Itoa(page)
 
 				continue
 			} else {

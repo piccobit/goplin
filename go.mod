@@ -1,4 +1,4 @@
-module goplin
+module github.com/piccobit/goplin
 
 go 1.19
 

@@ -7,8 +7,8 @@ import (
 	"path"
 
 	"github.com/alecthomas/kong"
+	"github.com/piccobit/goplin"
 	"github.com/spf13/viper"
-	"goplin"
 )
 
 type Context struct {
@@ -16,6 +16,39 @@ type Context struct {
 }
 
 type TagsListCmd struct {
+	ID       string `arg:"" optional:"" name:"id" help:"List tag with specified ID"`
+	OrderBy  string `name:"order-by" help:"order by specified field"`
+	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
+}
+
+func getItemTypes() []string {
+	return []string{
+		"unknown",
+		"note",
+		"folder",
+		"setting",
+		"resource",
+		"tag",
+		"note_tag",
+		"search",
+		"alarm",
+		"master_key",
+		"item_change",
+		"note_resource",
+		"resource_local_state",
+		"revision",
+		"migration",
+		"smart_filter",
+		"command",
+	}
+}
+
+var cli struct {
+	Debug bool `help:"Enable debug mode."`
+
+	Tags struct {
+		List TagsListCmd `cmd:"" requires:"" help:"List Joplin tags"`
+	} `cmd:"" help:"Joplin tag commands"`
 }
 
 var (
@@ -23,26 +56,31 @@ var (
 )
 
 func (t *TagsListCmd) Run(ctx *Context) error {
-	tags, err := client.GetTags()
-	if err != nil {
-		return err
-	}
+	if len(t.ID) == 0 {
+		tags, err := client.GetTags(t.OrderBy, t.OrderDir)
+		if err != nil {
+			return err
+		}
 
-	fmt.Println("Tags:")
+		fmt.Println("Tags:")
 
-	for _, tag := range tags {
-		fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n", tag.ID, tag.ParentID, tag.Title)
+		for _, tag := range tags {
+			fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
+				tag.ID, tag.ParentID, tag.Title)
+		}
+	} else {
+		tag, err := client.GetTag(t.ID)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Tag:")
+
+		fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
+			tag.ID, tag.ParentID, tag.Title)
 	}
 
 	return nil
-}
-
-var cli struct {
-	Debug bool `help:"Enable debug mode."`
-
-	Tags struct {
-		List TagsListCmd `cmd:"" requires:"" help:"List tags"`
-	} `cmd:"" help:"Tag commands"`
 }
 
 func main() {

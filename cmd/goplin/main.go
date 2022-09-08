@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/alecthomas/kong"
 	"github.com/imroc/req/v3"
@@ -12,21 +13,44 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Context struct {
+type CliContext struct {
 	Debug bool
 }
 
 type ListTagsCmd struct {
-	ID       string `arg:"" optional:"" name:"id" help:"Tags tag with specified ID"`
-	OrderBy  string `name:"order-by" help:"order by specified field"`
-	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
+	DuplicatesOnly bool     `name:"duplicates-only" help:"List only duplicate tags."`
+	IDs            []string `arg:"" optional:"" name:"id" help:"List tags with the specified IDs."`
+	OrderBy        string   `name:"order-by" help:"Order by specified field."`
+	OrderDir       string   `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 }
 
 type ListNotesCmd struct {
-	ID       string `arg:"" optional:"" name:"id" help:"Tags notes with specified tag"`
-	OrderBy  string `name:"order-by" help:"order by specified field"`
-	OrderDir string `name:"order-dir" help:"order by specified direction: ASC or DESC"`
+	By       string   `optional:"" name:"by" help:"Find by ID or tag."`
+	IDs      []string `arg:"" optional:"" name:"id" help:"List notes with the specified IDs or tag IDs."`
+	OrderBy  string   `name:"order-by" help:"Order by specified field."`
+	OrderDir string   `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 }
+
+type DeleteTagsCmd struct {
+	IDs []string `arg:"" name:"id" help:"Delete tags with the specified IDs."`
+}
+
+var cli struct {
+	Debug bool `help:"Enable debug mode."`
+
+	List struct {
+		Tags  ListTagsCmd  `cmd:"" requires:"" help:"List tags."`
+		Notes ListNotesCmd `cmd:"" requires:"" help:"List notes."`
+	} `cmd:"" help:"Joplin list commands."`
+
+	Delete struct {
+		Tags DeleteTagsCmd `cmd:"" requires:"" help:"Delete tags."`
+	} `cmd:"" help:"Joplin delete commands."`
+}
+
+var (
+	client *goplin.Client
+)
 
 func getItemTypes() []string {
 	return []string{
@@ -50,81 +74,120 @@ func getItemTypes() []string {
 	}
 }
 
-var cli struct {
-	Debug bool `help:"Enable debug mode."`
-
-	List struct {
-		Tags  ListTagsCmd  `cmd:"" requires:"" help:"List Joplin tags"`
-		Notes ListNotesCmd `cmd:"" requires:"" help:"List notes for specified Joplin tag"`
-	} `cmd:"" help:"Joplin list commands"`
-}
-
-var (
-	client *goplin.Client
-)
-
-func (ltc *ListTagsCmd) Run(ctx *Context) error {
+func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
+	const ListTagsFormat = "%-32s \u2502 %-32s \u2502 %s\n"
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
 	}
 
-	if len(ltc.ID) == 0 {
-		tags, err := client.GetTags(ltc.OrderBy, ltc.OrderDir)
+	if !ltc.DuplicatesOnly {
+		fmt.Println("Tags:")
+		fmt.Printf(ListTagsFormat, "ID", "Parent ID", "Title")
+	}
+
+	if len(ltc.IDs) == 0 {
+		tags, err := client.GetAllTags(ltc.OrderBy, ltc.OrderDir)
 		if err != nil {
 			return err
 		}
 
-		fmt.Println("Tags:")
+		if ltc.DuplicatesOnly {
+			fmt.Println("Duplicate tags:")
 
-		for _, tag := range tags {
-			fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
-				tag.ID, tag.ParentID, tag.Title)
+			tagsFound := make(map[string][]string)
+
+			for _, tag := range tags {
+				tagsFound[tag.Title] = append(tagsFound[tag.Title], tag.ID)
+			}
+
+			for title, ids := range tagsFound {
+				if len(ids) > 1 {
+					fmt.Printf("%s:", title)
+					for _, id := range ids {
+						fmt.Printf(" %s", id)
+					}
+					fmt.Println()
+				}
+			}
+		} else {
+			for _, tag := range tags {
+				fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+			}
 		}
 	} else {
-		tag, err := client.GetTag(ltc.ID)
-		if err != nil {
-			return err
+		for _, id := range ltc.IDs {
+			tag, err := client.GetTag(id)
+			if err != nil {
+				fmt.Printf(ListTagsFormat, id, "ERROR: tag not found", "")
+			} else {
+				fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+			}
 		}
-
-		fmt.Println("Tag:")
-
-		fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
-			tag.ID, tag.ParentID, tag.Title)
 	}
 
 	return nil
 }
 
-func (lnc *ListNotesCmd) Run(ctx *Context) error {
+func (lnc *ListNotesCmd) Run(ctx *CliContext) error {
+	const ListNotesFormat = "%-32s \u2502 %-32s \u2502 %s\n"
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
 	}
 
-	if len(lnc.ID) != 0 {
-		notes, err := client.GetNote(lnc.ID, lnc.OrderBy, lnc.OrderDir)
+	fmt.Println("Notes:")
+	fmt.Printf(ListNotesFormat, "ID", "Parent ID", "Title")
+
+	if len(lnc.IDs) == 0 {
+		notes, err := client.GetAllNotes(lnc.OrderBy, lnc.OrderDir)
 		if err != nil {
 			return err
 		}
 
-		fmt.Println("Notes:")
-
 		for _, note := range notes {
-			fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
-				note.ID, note.ParentID, note.Title)
+			fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
 		}
 	} else {
-		notes, err := client.GetNotes(lnc.OrderBy, lnc.OrderDir)
-		if err != nil {
-			return err
+		if strings.ToLower(lnc.By) == "tag" {
+			for _, id := range lnc.IDs {
+				notes, err := client.GetNotes(id, lnc.OrderBy, lnc.OrderDir)
+				if err != nil {
+					fmt.Printf(ListNotesFormat, id, "ERROR: note not found", "")
+				} else {
+					for _, note := range notes {
+						fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
+					}
+				}
+			}
+		} else {
+			for _, id := range lnc.IDs {
+				note, err := client.GetNote(id)
+				if err != nil {
+					fmt.Printf(ListNotesFormat, id, "ERROR: note not found", "")
+				} else {
+					fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
+				}
+
+			}
 		}
+	}
 
-		fmt.Println("Notes:")
+	return nil
+}
 
-		for _, note := range notes {
-			fmt.Printf("ID: '%s', Parent ID: '%s', Title: '%s'\n",
-				note.ID, note.ParentID, note.Title)
+func (dtc *DeleteTagsCmd) Run(ctx *CliContext) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	for _, id := range dtc.IDs {
+		err := client.DeleteTag(id)
+		if err != nil {
+			fmt.Printf("Could not find tag with ID '%s'\n", id)
+		} else {
+			fmt.Printf("Tag with ID '%s' deleted'\n", id)
 		}
 	}
 
@@ -164,6 +227,6 @@ func main() {
 	}
 
 	ctx := kong.Parse(&cli)
-	err = ctx.Run(&Context{Debug: cli.Debug})
+	err = ctx.Run(&CliContext{Debug: cli.Debug})
 	ctx.FatalIfErrorf(err)
 }

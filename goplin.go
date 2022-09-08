@@ -218,8 +218,12 @@ func (c *Client) GetTag(id string) (Tag, error) {
 	}
 
 	if resp.IsError() {
-		// handle response.
-		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+		if resp.StatusCode == 404 {
+			err = fmt.Errorf("could not find tag with IDs '%s", id)
+
+		} else {
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+		}
 
 		return tag, err
 	}
@@ -234,7 +238,40 @@ func (c *Client) GetTag(id string) (Tag, error) {
 	return tag, err
 }
 
-func (c *Client) GetNote(id string, orderBy string, orderDir string) ([]Note, error) {
+func (c *Client) GetNote(id string) (Note, error) {
+	var note Note
+
+	resp, err := c.handle.R().
+		SetPathParam("id", id).
+		SetQueryParam("token", c.apiToken).
+		SetResult(&note).
+		SetError(&note).
+		Get(fmt.Sprintf("http://localhost:%d/notes/{id}", c.port))
+	if err != nil {
+		return note, err
+	}
+
+	if resp.IsError() {
+		if resp.StatusCode == 404 {
+			err = fmt.Errorf("could not find note with ID '%s", id)
+		} else {
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+		}
+
+		return note, err
+	}
+
+	if resp.IsSuccess() {
+		return note, nil
+	}
+
+	// Handle response.
+	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+	return note, err
+}
+
+func (c *Client) GetNotes(id string, orderBy string, orderDir string) ([]Note, error) {
 	var result notesResult
 	var notes []Note
 
@@ -266,8 +303,11 @@ func (c *Client) GetNote(id string, orderBy string, orderDir string) ([]Note, er
 		}
 
 		if resp.IsError() {
-			// handle response.
-			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+			if resp.StatusCode == 404 {
+				err = fmt.Errorf("could not find note with IDs '%s", id)
+			} else {
+				err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+			}
 
 			return notes, err
 		}
@@ -295,7 +335,7 @@ func (c *Client) GetNote(id string, orderBy string, orderDir string) ([]Note, er
 	}
 }
 
-func (c *Client) GetNotes(orderBy string, orderDir string) ([]Note, error) {
+func (c *Client) GetAllNotes(orderBy string, orderDir string) ([]Note, error) {
 	var result notesResult
 	var notes []Note
 
@@ -355,7 +395,7 @@ func (c *Client) GetNotes(orderBy string, orderDir string) ([]Note, error) {
 	}
 }
 
-func (c *Client) GetTags(orderBy string, orderDir string) ([]Tag, error) {
+func (c *Client) GetAllTags(orderBy string, orderDir string) ([]Tag, error) {
 	var result tagsResult
 	var tags []Tag
 
@@ -413,6 +453,32 @@ func (c *Client) GetTags(orderBy string, orderDir string) ([]Tag, error) {
 
 		return tags, err
 	}
+}
+
+func (c *Client) DeleteTag(id string) error {
+	resp, err := c.handle.R().
+		SetPathParam("id", id).
+		SetQueryParam("token", c.apiToken).
+		Delete(fmt.Sprintf("http://localhost:%d/tags/{id}", c.port))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		// handle response.
+		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+		return err
+	}
+
+	if resp.IsSuccess() {
+		return nil
+	}
+
+	// handle response.
+	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+	return err
 }
 
 func (c *Client) GetApiToken() string {

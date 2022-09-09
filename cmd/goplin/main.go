@@ -14,25 +14,42 @@ import (
 )
 
 type CliContext struct {
-	Debug bool
+	Debug    bool
+	NoHeader bool
 }
 
 type ListTagsCmd struct {
-	DuplicatesOnly bool     `name:"duplicates-only" help:"List only duplicate tags."`
-	IDs            []string `arg:"" optional:"" name:"id" help:"List tags with the specified IDs."`
-	OrderBy        string   `name:"order-by" help:"Order by specified field."`
-	OrderDir       string   `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
+	NoHeader       bool   `help:"Do not print header."`
+	DuplicatesOnly bool   `name:"duplicates-only" help:"List only duplicate tags."`
+	OrphansOnly    bool   `name:"orphans-only" help:"List only orphan tags."`
+	OrderBy        string `name:"order-by" help:"Order by specified field."`
+	OrderDir       string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
+
+	IDs []string `arg:"" optional:"" name:"id" help:"List tags with the specified IDs."`
 }
 
 type ListNotesCmd struct {
-	By       string   `optional:"" name:"by" help:"Find by ID or tag."`
-	IDs      []string `arg:"" optional:"" name:"id" help:"List notes with the specified IDs or tag IDs."`
-	OrderBy  string   `name:"order-by" help:"Order by specified field."`
-	OrderDir string   `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
+	NoHeader bool   `help:"Do not print header."`
+	By       string `name:"by" help:"Find by ID or tag."`
+	OrderBy  string `name:"order-by" help:"Order by specified field."`
+	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
+
+	IDs []string `arg:"" optional:"" name:"id" help:"List notes with the specified IDs or tag IDs."`
 }
 
 type DeleteTagsCmd struct {
 	IDs []string `arg:"" name:"id" help:"Delete tags with the specified IDs."`
+}
+
+type DeleteTagFromNoteCmd struct {
+	TagID struct {
+		TagID string `arg:""`
+		From  struct {
+			NoteID struct {
+				NoteID string `arg:""`
+			} `arg:""`
+		} `cmd:""`
+	} `arg:""`
 }
 
 var cli struct {
@@ -44,7 +61,8 @@ var cli struct {
 	} `cmd:"" help:"Joplin list commands."`
 
 	Delete struct {
-		Tags DeleteTagsCmd `cmd:"" requires:"" help:"Delete tags."`
+		Tags DeleteTagsCmd        `cmd:"" requires:"" help:"Delete tags."`
+		Tag  DeleteTagFromNoteCmd `cmd:"" requires:"" help:"Delete tag from note."`
 	} `cmd:"" help:"Joplin delete commands."`
 }
 
@@ -81,9 +99,11 @@ func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
 		req.EnableDebugLog()
 	}
 
-	if !ltc.DuplicatesOnly {
-		fmt.Println("Tags:")
-		fmt.Printf(ListTagsFormat, "ID", "Parent ID", "Title")
+	if !ltc.NoHeader {
+		if !ltc.DuplicatesOnly {
+			fmt.Println("Tags:")
+			fmt.Printf(ListTagsFormat, "ID", "Parent ID", "Title")
+		}
 	}
 
 	if len(ltc.IDs) == 0 {
@@ -93,7 +113,9 @@ func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
 		}
 
 		if ltc.DuplicatesOnly {
-			fmt.Println("Duplicate tags:")
+			if !ltc.NoHeader {
+				fmt.Println("Duplicate tags:")
+			}
 
 			tagsFound := make(map[string][]string)
 
@@ -101,8 +123,12 @@ func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
 				tagsFound[tag.Title] = append(tagsFound[tag.Title], tag.ID)
 			}
 
+			duplicatesFound := 0
+
 			for title, ids := range tagsFound {
 				if len(ids) > 1 {
+					duplicatesFound++
+
 					fmt.Printf("%s:", title)
 					for _, id := range ids {
 						fmt.Printf(" %s", id)
@@ -110,16 +136,40 @@ func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
 					fmt.Println()
 				}
 			}
+
+			if duplicatesFound == 0 {
+				fmt.Println("No duplicates found.")
+			}
 		} else {
+			orphansFound := 0
+
 			for _, tag := range tags {
-				fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+				if ltc.OrphansOnly {
+					var notes []goplin.Note
+					notes, err = client.GetNotesByTag(tag.ID, ltc.OrderBy, ltc.OrderDir)
+					if err != nil {
+						continue
+					}
+
+					if len(notes) == 0 {
+						fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+					}
+				} else {
+					fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+				}
+			}
+
+			if ltc.OrphansOnly {
+				if orphansFound == 0 {
+					fmt.Println("No orphans found.")
+				}
 			}
 		}
 	} else {
 		for _, id := range ltc.IDs {
 			tag, err := client.GetTag(id)
 			if err != nil {
-				fmt.Printf(ListTagsFormat, id, "ERROR: tag not found", "")
+				fmt.Printf("%-32s <= ERROR: tag not found\n", id)
 			} else {
 				fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
 			}
@@ -136,8 +186,10 @@ func (lnc *ListNotesCmd) Run(ctx *CliContext) error {
 		req.EnableDebugLog()
 	}
 
-	fmt.Println("Notes:")
-	fmt.Printf(ListNotesFormat, "ID", "Parent ID", "Title")
+	if !lnc.NoHeader {
+		fmt.Println("Notes:")
+		fmt.Printf(ListNotesFormat, "ID", "Parent ID", "Title")
+	}
 
 	if len(lnc.IDs) == 0 {
 		notes, err := client.GetAllNotes(lnc.OrderBy, lnc.OrderDir)
@@ -151,9 +203,9 @@ func (lnc *ListNotesCmd) Run(ctx *CliContext) error {
 	} else {
 		if strings.ToLower(lnc.By) == "tag" {
 			for _, id := range lnc.IDs {
-				notes, err := client.GetNotes(id, lnc.OrderBy, lnc.OrderDir)
+				notes, err := client.GetNotesByTag(id, lnc.OrderBy, lnc.OrderDir)
 				if err != nil {
-					fmt.Printf(ListNotesFormat, id, "ERROR: note not found", "")
+					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
 					for _, note := range notes {
 						fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
@@ -164,7 +216,7 @@ func (lnc *ListNotesCmd) Run(ctx *CliContext) error {
 			for _, id := range lnc.IDs {
 				note, err := client.GetNote(id)
 				if err != nil {
-					fmt.Printf(ListNotesFormat, id, "ERROR: note not found", "")
+					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
 					fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
 				}
@@ -189,6 +241,22 @@ func (dtc *DeleteTagsCmd) Run(ctx *CliContext) error {
 		} else {
 			fmt.Printf("Tag with ID '%s' deleted'\n", id)
 		}
+	}
+
+	return nil
+}
+
+func (dtfnc *DeleteTagFromNoteCmd) Run(ctx *CliContext) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	err := client.DeleteTagFromNote(dtfnc.TagID.TagID, dtfnc.TagID.From.NoteID.NoteID)
+	if err != nil {
+		fmt.Printf("Could not find tag with ID '%s'\n", dtfnc.TagID)
+	} else {
+		fmt.Printf("Tag with ID '%s' deleted'\n", dtfnc.TagID)
 	}
 
 	return nil

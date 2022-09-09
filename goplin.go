@@ -271,7 +271,7 @@ func (c *Client) GetNote(id string) (Note, error) {
 	return note, err
 }
 
-func (c *Client) GetNotes(id string, orderBy string, orderDir string) ([]Note, error) {
+func (c *Client) GetNotesByTag(id string, orderBy string, orderDir string) ([]Note, error) {
 	var result notesResult
 	var notes []Note
 
@@ -460,6 +460,33 @@ func (c *Client) DeleteTag(id string) error {
 		SetPathParam("id", id).
 		SetQueryParam("token", c.apiToken).
 		Delete(fmt.Sprintf("http://localhost:%d/tags/{id}", c.port))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		// handle response.
+		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+		return err
+	}
+
+	if resp.IsSuccess() {
+		return nil
+	}
+
+	// handle response.
+	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+	return err
+}
+
+func (c *Client) DeleteTagFromNote(tagID string, noteID string) error {
+	resp, err := c.handle.R().
+		SetPathParam("tagID", tagID).
+		SetPathParam("noteID", noteID).
+		SetQueryParam("token", c.apiToken).
+		Delete(fmt.Sprintf("http://localhost:%d/tags/{tagID}/notes/{noteID}", c.port))
 	if err != nil {
 		return err
 	}

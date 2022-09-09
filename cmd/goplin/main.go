@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 
 	"github.com/alecthomas/kong"
@@ -20,6 +21,7 @@ type CliContext struct {
 
 type ListTagsCmd struct {
 	NoHeader       bool   `help:"Do not print header."`
+	Fields         string `help:"Show only the specified fields."`
 	DuplicatesOnly bool   `name:"duplicates-only" help:"List only duplicate tags."`
 	OrphansOnly    bool   `name:"orphans-only" help:"List only orphan tags."`
 	OrderBy        string `name:"order-by" help:"Order by specified field."`
@@ -30,6 +32,7 @@ type ListTagsCmd struct {
 
 type ListNotesCmd struct {
 	NoHeader bool   `help:"Do not print header."`
+	Fields   string `help:"Show only the specified fields."`
 	By       string `name:"by" help:"Find by ID or tag."`
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
@@ -92,28 +95,30 @@ func getItemTypes() []string {
 	}
 }
 
-func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
-	const ListTagsFormat = "%-32s \u2502 %-32s \u2502 %s\n"
+func (cmd *ListTagsCmd) Run(ctx *CliContext) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
 	}
 
-	if !ltc.NoHeader {
-		if !ltc.DuplicatesOnly {
-			fmt.Println("Tags:")
-			fmt.Printf(ListTagsFormat, "ID", "Parent ID", "Title")
+	if len(cmd.Fields) == 0 {
+		cmd.Fields = "id,parent_id,title"
+	}
+
+	if !cmd.NoHeader {
+		if !cmd.DuplicatesOnly {
+			PrintHeader("Tags", cmd.Fields, &goplin.TagFormats)
 		}
 	}
 
-	if len(ltc.IDs) == 0 {
-		tags, err := client.GetAllTags(ltc.OrderBy, ltc.OrderDir)
+	if len(cmd.IDs) == 0 {
+		tags, err := client.GetAllTags(cmd.OrderBy, cmd.OrderDir)
 		if err != nil {
 			return err
 		}
 
-		if ltc.DuplicatesOnly {
-			if !ltc.NoHeader {
+		if cmd.DuplicatesOnly {
+			if !cmd.NoHeader {
 				fmt.Println("Duplicate tags:")
 			}
 
@@ -144,34 +149,35 @@ func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
 			orphansFound := 0
 
 			for _, tag := range tags {
-				if ltc.OrphansOnly {
+				if cmd.OrphansOnly {
 					var notes []goplin.Note
-					notes, err = client.GetNotesByTag(tag.ID, ltc.OrderBy, ltc.OrderDir)
+					notes, err = client.GetNotesByTag(tag.ID, cmd.OrderBy, cmd.OrderDir)
 					if err != nil {
 						continue
 					}
 
 					if len(notes) == 0 {
-						fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+						orphansFound++
+						PrintCells(tag, cmd.Fields, &goplin.TagFormats)
 					}
 				} else {
-					fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+					PrintCells(tag, cmd.Fields, &goplin.TagFormats)
 				}
 			}
 
-			if ltc.OrphansOnly {
+			if cmd.OrphansOnly {
 				if orphansFound == 0 {
 					fmt.Println("No orphans found.")
 				}
 			}
 		}
 	} else {
-		for _, id := range ltc.IDs {
-			tag, err := client.GetTag(id)
+		for _, id := range cmd.IDs {
+			tag, err := client.GetTag(id, cmd.Fields)
 			if err != nil {
 				fmt.Printf("%-32s <= ERROR: tag not found\n", id)
 			} else {
-				fmt.Printf(ListTagsFormat, tag.ID, tag.ParentID, tag.Title)
+				PrintCells(tag, cmd.Fields, &goplin.TagFormats)
 			}
 		}
 	}
@@ -179,46 +185,48 @@ func (ltc *ListTagsCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (lnc *ListNotesCmd) Run(ctx *CliContext) error {
-	const ListNotesFormat = "%-32s \u2502 %-32s \u2502 %s\n"
+func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
 	}
 
-	if !lnc.NoHeader {
-		fmt.Println("Notes:")
-		fmt.Printf(ListNotesFormat, "ID", "Parent ID", "Title")
+	if len(cmd.Fields) == 0 {
+		cmd.Fields = "id,parent_id,title"
 	}
 
-	if len(lnc.IDs) == 0 {
-		notes, err := client.GetAllNotes(lnc.OrderBy, lnc.OrderDir)
+	if !cmd.NoHeader {
+		PrintHeader("Notes", cmd.Fields, &goplin.NoteFormats)
+	}
+
+	if len(cmd.IDs) == 0 {
+		notes, err := client.GetAllNotes(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
 		if err != nil {
 			return err
 		}
 
 		for _, note := range notes {
-			fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
+			PrintCells(note, cmd.Fields, &goplin.NoteFormats)
 		}
 	} else {
-		if strings.ToLower(lnc.By) == "tag" {
-			for _, id := range lnc.IDs {
-				notes, err := client.GetNotesByTag(id, lnc.OrderBy, lnc.OrderDir)
+		if strings.ToLower(cmd.By) == "tag" {
+			for _, id := range cmd.IDs {
+				notes, err := client.GetNotesByTag(id, cmd.OrderBy, cmd.OrderDir)
 				if err != nil {
 					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
 					for _, note := range notes {
-						fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
+						PrintCells(note, cmd.Fields, &goplin.NoteFormats)
 					}
 				}
 			}
 		} else {
-			for _, id := range lnc.IDs {
-				note, err := client.GetNote(id)
+			for _, id := range cmd.IDs {
+				note, err := client.GetNote(id, cmd.Fields)
 				if err != nil {
 					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
-					fmt.Printf(ListNotesFormat, note.ID, note.ParentID, note.Title)
+					PrintCells(note, cmd.Fields, &goplin.NoteFormats)
 				}
 
 			}
@@ -228,13 +236,13 @@ func (lnc *ListNotesCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (dtc *DeleteTagsCmd) Run(ctx *CliContext) error {
+func (cmd *DeleteTagsCmd) Run(ctx *CliContext) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
 	}
 
-	for _, id := range dtc.IDs {
+	for _, id := range cmd.IDs {
 		err := client.DeleteTag(id)
 		if err != nil {
 			fmt.Printf("Could not find tag with ID '%s'\n", id)
@@ -246,20 +254,54 @@ func (dtc *DeleteTagsCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (dtfnc *DeleteTagFromNoteCmd) Run(ctx *CliContext) error {
+func (cmd *DeleteTagFromNoteCmd) Run(ctx *CliContext) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
 	}
 
-	err := client.DeleteTagFromNote(dtfnc.TagID.TagID, dtfnc.TagID.From.NoteID.NoteID)
+	err := client.DeleteTagFromNote(cmd.TagID.TagID, cmd.TagID.From.NoteID.NoteID)
 	if err != nil {
-		fmt.Printf("Could not find tag with ID '%s'\n", dtfnc.TagID)
+		fmt.Printf("Could not find tag with ID '%s'\n", cmd.TagID)
 	} else {
-		fmt.Printf("Tag with ID '%s' deleted'\n", dtfnc.TagID)
+		fmt.Printf("Tag with ID '%s' deleted'\n", cmd.TagID)
 	}
 
 	return nil
+}
+
+func PrintHeader(title string, fields string, format *map[string]goplin.CellFormat) {
+	fmt.Printf("%s:\n", title)
+
+	columns := strings.Split(fields, ",")
+
+	for i, column := range columns {
+		cf := (*format)[column]
+		if i == 0 {
+			fmt.Printf(cf.Format, cf.Name)
+		} else {
+			fmt.Printf(" \u2502 "+cf.Format, cf.Name)
+		}
+	}
+
+	fmt.Println()
+}
+
+func PrintCells(cell interface{}, fields string, format *map[string]goplin.CellFormat) {
+
+	columns := strings.Split(fields, ",")
+
+	for i, column := range columns {
+		value := reflect.ValueOf(cell)
+		cf := (*format)[column]
+		if i == 0 {
+			fmt.Printf(cf.Format, value.FieldByName(cf.Field))
+		} else {
+			fmt.Printf(" \u2502 "+cf.Format, value.FieldByName(cf.Field))
+		}
+	}
+
+	fmt.Println()
 }
 
 func main() {

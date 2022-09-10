@@ -119,8 +119,13 @@ type tagsResult struct {
 }
 
 type notesResult struct {
-	Notes   []Note `json:"items"`
+	Items   []Note `json:"items"`
 	HasMore bool   `json:"has_more"`
+}
+
+type foldersResult struct {
+	Items   []Folder `json:"items"`
+	HasMore bool     `json:"has_more"`
 }
 
 const (
@@ -769,7 +774,7 @@ func (c *Client) GetNotesByTag(id string, orderBy string, orderDir string) ([]No
 		}
 
 		if resp.IsSuccess() {
-			for _, note := range result.Notes {
+			for _, note := range result.Items {
 				notes = append(notes, note)
 			}
 
@@ -829,7 +834,7 @@ func (c *Client) GetAllNotes(fields string, orderBy string, orderDir string) ([]
 		}
 
 		if resp.IsSuccess() {
-			for _, note := range result.Notes {
+			for _, note := range result.Items {
 				notes = append(notes, note)
 			}
 
@@ -849,6 +854,100 @@ func (c *Client) GetAllNotes(fields string, orderBy string, orderDir string) ([]
 
 		return notes, err
 	}
+}
+
+func (c *Client) GetAllFolders(fields string, orderBy string, orderDir string) ([]Folder, error) {
+	var result foldersResult
+	var folders []Folder
+
+	page := 1
+
+	queryParams := map[string]string{
+		"token":  c.apiToken,
+		"fields": fields,
+		"page":   strconv.Itoa(page),
+	}
+
+	if len(orderBy) != 0 {
+		queryParams["order_by"] = orderBy
+	}
+
+	if len(orderDir) != 0 {
+		queryParams["order_dir"] = strings.ToUpper(orderDir)
+	}
+
+	for {
+		resp, err := c.handle.R().
+			SetQueryParams(queryParams).
+			SetResult(&result).
+			SetError(&result).
+			Get(fmt.Sprintf("http://localhost:%d/folders", c.port))
+		if err != nil {
+			return folders, err
+		}
+
+		if resp.IsError() {
+			// Handle response.
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+			return folders, err
+		}
+
+		if resp.IsSuccess() {
+			for _, folder := range result.Items {
+				folders = append(folders, folder)
+			}
+
+			if result.HasMore {
+				page++
+
+				queryParams["page"] = strconv.Itoa(page)
+
+				continue
+			} else {
+				return folders, nil
+			}
+		}
+
+		// handle response.
+		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+		return folders, err
+	}
+}
+
+func (c *Client) GetFolder(id string, fields string) (Folder, error) {
+	var folder Folder
+
+	resp, err := c.handle.R().
+		SetPathParam("id", id).
+		SetQueryParam("token", c.apiToken).
+		SetQueryParam("fields", fields).
+		SetResult(&folder).
+		SetError(&folder).
+		Get(fmt.Sprintf("http://localhost:%d/folders/{id}", c.port))
+	if err != nil {
+		return folder, err
+	}
+
+	if resp.IsError() {
+		if resp.StatusCode == 404 {
+			err = fmt.Errorf("could not find folder with ID '%s", id)
+		} else {
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+		}
+
+		return folder, err
+	}
+
+	if resp.IsSuccess() {
+		return folder, nil
+	}
+
+	// Handle response.
+	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+	return folder, err
 }
 
 func (c *Client) GetAllTags(orderBy string, orderDir string) ([]Tag, error) {

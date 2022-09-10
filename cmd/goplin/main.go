@@ -40,6 +40,15 @@ type ListNotesCmd struct {
 	IDs []string `arg:"" optional:"" name:"id" help:"List notes with the specified IDs or tag IDs."`
 }
 
+type ListFoldersCmd struct {
+	NoHeader bool   `help:"Do not print header."`
+	Fields   string `help:"Show only the specified fields."`
+	OrderBy  string `name:"order-by" help:"Order by specified field."`
+	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
+
+	IDs []string `arg:"" optional:"" name:"id" help:"List folders with the specified IDs or tag IDs."`
+}
+
 type DeleteTagsCmd struct {
 	IDs []string `arg:"" name:"id" help:"Delete tags with the specified IDs."`
 }
@@ -59,8 +68,9 @@ var cli struct {
 	Debug bool `help:"Enable debug mode."`
 
 	List struct {
-		Tags  ListTagsCmd  `cmd:"" requires:"" help:"List tags."`
-		Notes ListNotesCmd `cmd:"" requires:"" help:"List notes."`
+		Tags    ListTagsCmd    `cmd:"" requires:"" help:"List tags."`
+		Notes   ListNotesCmd   `cmd:"" requires:"" help:"List notes."`
+		Folders ListFoldersCmd `cmd:"" requires:"" help:"List folders."`
 	} `cmd:"" help:"Joplin list commands."`
 
 	Delete struct {
@@ -230,6 +240,44 @@ func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 				}
 
 			}
+		}
+	}
+
+	return nil
+}
+
+func (cmd *ListFoldersCmd) Run(ctx *CliContext) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	if len(cmd.Fields) == 0 {
+		cmd.Fields = "id,parent_id,title"
+	}
+
+	if !cmd.NoHeader {
+		PrintHeader("Folders", cmd.Fields, &goplin.FolderFormats)
+	}
+
+	if len(cmd.IDs) == 0 {
+		folders, err := client.GetAllFolders(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
+		if err != nil {
+			return err
+		}
+
+		for _, folder := range folders {
+			PrintCells(folder, cmd.Fields, &goplin.NoteFormats)
+		}
+	} else {
+		for _, id := range cmd.IDs {
+			note, err := client.GetFolder(id, cmd.Fields)
+			if err != nil {
+				fmt.Printf("%-32s <= ERROR: folder not found\n", id)
+			} else {
+				PrintCells(note, cmd.Fields, &goplin.NoteFormats)
+			}
+
 		}
 	}
 

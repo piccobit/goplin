@@ -856,6 +856,67 @@ func (c *Client) GetAllNotes(fields string, orderBy string, orderDir string) ([]
 	}
 }
 
+func (c *Client) GetNotesInFolder(id string, fields string, orderBy string, orderDir string) ([]Note, error) {
+	var result notesResult
+	var notes []Note
+
+	page := 1
+
+	queryParams := map[string]string{
+		"token":  c.apiToken,
+		"fields": fields,
+		"page":   strconv.Itoa(page),
+	}
+
+	if len(orderBy) != 0 {
+		queryParams["order_by"] = orderBy
+	}
+
+	if len(orderDir) != 0 {
+		queryParams["order_dir"] = strings.ToUpper(orderDir)
+	}
+
+	for {
+		resp, err := c.handle.R().
+			SetPathParam("id", id).
+			SetQueryParams(queryParams).
+			SetResult(&result).
+			SetError(&result).
+			Get(fmt.Sprintf("http://localhost:%d/folders/{id}/notes", c.port))
+		if err != nil {
+			return notes, err
+		}
+
+		if resp.IsError() {
+			// handle response.
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+			return notes, err
+		}
+
+		if resp.IsSuccess() {
+			for _, note := range result.Items {
+				notes = append(notes, note)
+			}
+
+			if result.HasMore {
+				page++
+
+				queryParams["page"] = strconv.Itoa(page)
+
+				continue
+			} else {
+				return notes, nil
+			}
+		}
+
+		// handle response.
+		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+		return notes, err
+	}
+}
+
 func (c *Client) GetAllFolders(fields string, orderBy string, orderDir string) ([]Folder, error) {
 	var result foldersResult
 	var folders []Folder

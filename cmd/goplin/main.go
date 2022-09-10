@@ -34,6 +34,7 @@ type ListNotesCmd struct {
 	NoHeader bool   `help:"Do not print header."`
 	Fields   string `help:"Show only the specified fields."`
 	By       string `name:"by" help:"Find by ID or tag."`
+	In       string `name:"in" help:"Find notes in specified folder"`
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
@@ -196,6 +197,9 @@ func (cmd *ListTagsCmd) Run(ctx *CliContext) error {
 }
 
 func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
+	var err error
+	var notes []goplin.Note
+
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
@@ -210,7 +214,12 @@ func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 	}
 
 	if len(cmd.IDs) == 0 {
-		notes, err := client.GetAllNotes(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
+		if len(cmd.In) == 0 {
+			notes, err = client.GetAllNotes(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
+		} else {
+			notes, err = client.GetNotesInFolder(cmd.In, cmd.Fields, cmd.OrderBy, cmd.OrderDir)
+		}
+
 		if err != nil {
 			return err
 		}

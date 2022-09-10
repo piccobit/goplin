@@ -351,6 +351,157 @@ var NoteFormats = map[string]CellFormat{
 	},
 }
 
+var ResourceFormats = map[string]CellFormat{
+	"id": {
+		"ID",
+		"ID",
+		"%-32s",
+	},
+	"title": {
+		"Title",
+		"Title",
+		"%-32.32s",
+	},
+	"mime": {
+		"Mime",
+		"Mime",
+		"%-32.32s",
+	},
+	"filename": {
+		"Filename",
+		"Filename",
+		"%-32.32s",
+	},
+	"created_time": {
+		"Created Time",
+		"CreatedTime",
+		"%16.16d",
+	},
+	"updated_time": {
+		"Updated Time",
+		"UpdatedTime",
+		"%16.16d",
+	},
+	"user_created_time": {
+		"User Created Time",
+		"UserCreatedTime",
+		"%-16.16d",
+	},
+	"user_updated_time": {
+		"User Updated Time",
+		"UserUpdatedTime",
+		"%-16.16d",
+	},
+	"file_extension": {
+		"File Extension",
+		"FileExtension",
+		"%-32.32s",
+	},
+	"encryption_cipher_text": {
+		"Encryption Cipher Text",
+		"EncryptionCipherText",
+		"%-32.32s",
+	},
+	"encryption_applied": {
+		"Encryption Applied",
+		"EncryptionApplied",
+		"%-16.16d",
+	},
+	"encryption_blob_encrypted": {
+		"Encryption Blob Encrypted",
+		"EncryptionBlobEncrypted",
+		"%-16.16d",
+	},
+	"size": {
+		"Size",
+		"Size",
+		"%-16.16d",
+	},
+	"is_shared": {
+		"Is Shared",
+		"IsShared",
+		"%-16.16d",
+	},
+	"share_id": {
+		"Share ID",
+		"ShareID",
+		"%-32.32s",
+	},
+	"master_key_id": {
+		"Master Key ID",
+		"MasterKeyID",
+		"%-32.32s",
+	},
+}
+
+var FolderFormats = map[string]CellFormat{
+	"id": {
+		"ID",
+		"ID",
+		"%-32s",
+	},
+	"parent_id": {
+		"Parent ID",
+		"ParentID",
+		"%-32s",
+	},
+	"title": {
+		"Title",
+		"Title",
+		"%-32.32s",
+	},
+	"created_time": {
+		"Created Time",
+		"CreatedTime",
+		"%16.16d",
+	},
+	"updated_time": {
+		"Updated Time",
+		"UpdatedTime",
+		"%16.16d",
+	},
+	"user_created_time": {
+		"User Created Time",
+		"UserCreatedTime",
+		"%-16.16d",
+	},
+	"user_updated_time": {
+		"User Updated Time",
+		"UserUpdatedTime",
+		"%-16.16d",
+	},
+	"encryption_cipher_text": {
+		"Encryption Cipher Text",
+		"EncryptionCipherText",
+		"%-32.32s",
+	},
+	"encryption_applied": {
+		"Encryption Applied",
+		"EncryptionApplied",
+		"%-16.16d",
+	},
+	"is_shared": {
+		"Is Shared",
+		"IsShared",
+		"%-16.16d",
+	},
+	"share_id": {
+		"Share ID",
+		"ShareID",
+		"%-32.32s",
+	},
+	"master_key_id": {
+		"Master Key ID",
+		"MasterKeyID",
+		"%-32.32s",
+	},
+	"icon": {
+		"Icon",
+		"Icon",
+		"%-32.32s",
+	},
+}
+
 func New(apiToken string) (*Client, error) {
 	var retErr error
 

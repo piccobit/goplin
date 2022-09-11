@@ -128,16 +128,64 @@ type foldersResult struct {
 	HasMore bool     `json:"has_more"`
 }
 
+type Item struct {
+	ID       string `json:"id"`
+	ParentID string `json:"parent_id"`
+	Title    string `json:"title"`
+}
+type searchResult struct {
+	Items   []Item `json:"items"`
+	HasMore bool   `json:"has_more"`
+}
+
+type CellFormat struct {
+	Name   string
+	Field  string
+	Format string
+}
+
 const (
 	joplinMinPortNum   = 41184
 	joplinMaxPortNum   = 41194
 	retriesGetApiToken = 20
 )
 
-type CellFormat struct {
-	Name   string
-	Field  string
-	Format string
+const (
+	ItemTypeName               = "name"
+	ItemTypeFolder             = "folder"
+	ItemTypeSetting            = "setting"
+	ItemTypeResource           = "resource"
+	ItemTypeTag                = "tag"
+	ItemTypeNoteTag            = "note_tag"
+	ItemTypeSearch             = "search"
+	ItemTypeAlarm              = "alarm"
+	ItemTypeMasterKey          = "master_key"
+	ItemTypeItemChange         = "item_change"
+	ItemTypeNoteResource       = "note_resource"
+	ItemTypeResourceLocalState = "resource_local_state"
+	ItemTypeRevision           = "revision"
+	ItemTypeMigration          = "migration"
+	ItemTypeSmartFilter        = "smart_filter"
+	ItemTypeCommand            = "command"
+)
+
+var ItemTypes = []string{
+	ItemTypeName,
+	ItemTypeFolder,
+	ItemTypeSetting,
+	ItemTypeResource,
+	ItemTypeTag,
+	ItemTypeNoteTag,
+	ItemTypeSearch,
+	ItemTypeAlarm,
+	ItemTypeMasterKey,
+	ItemTypeItemChange,
+	ItemTypeNoteResource,
+	ItemTypeResourceLocalState,
+	ItemTypeRevision,
+	ItemTypeMigration,
+	ItemTypeSmartFilter,
+	ItemTypeCommand,
 }
 
 var TagFormats = map[string]CellFormat{
@@ -154,7 +202,7 @@ var TagFormats = map[string]CellFormat{
 	"title": {
 		"Title",
 		"Title",
-		"%-32.32s",
+		"%-60.60s",
 	},
 	"created_time": {
 		"Created Time",
@@ -207,12 +255,12 @@ var NoteFormats = map[string]CellFormat{
 	"title": {
 		"Title",
 		"Title",
-		"%-32.32s",
+		"%-60.60s",
 	},
 	"body": {
 		"Body",
 		"Body",
-		"%-80.80s",
+		"%-60.60s",
 	},
 	"created_time": {
 		"Created Time",
@@ -365,7 +413,7 @@ var ResourceFormats = map[string]CellFormat{
 	"title": {
 		"Title",
 		"Title",
-		"%-32.32s",
+		"%-60.60s",
 	},
 	"mime": {
 		"Mime",
@@ -453,7 +501,7 @@ var FolderFormats = map[string]CellFormat{
 	"title": {
 		"Title",
 		"Title",
-		"%-32.32s",
+		"%-60.60s",
 	},
 	"created_time": {
 		"Created Time",
@@ -504,6 +552,24 @@ var FolderFormats = map[string]CellFormat{
 		"Icon",
 		"Icon",
 		"%-32.32s",
+	},
+}
+
+var SearchFormats = map[string]CellFormat{
+	"id": {
+		"ID",
+		"ID",
+		"%-32s",
+	},
+	"parent_id": {
+		"Parent ID",
+		"ParentID",
+		"%-32s",
+	},
+	"title": {
+		"Title",
+		"Title",
+		"%-60.60s",
 	},
 }
 
@@ -584,7 +650,7 @@ func (c *Client) getAuthToken() (string, error) {
 	}
 
 	if resp.IsError() {
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
 
 		return token, err
@@ -594,7 +660,7 @@ func (c *Client) getAuthToken() (string, error) {
 		return result.AuthToken, nil
 	}
 
-	// handle response.
+	// Handle response.
 	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 	return token, err
@@ -692,7 +758,7 @@ func (c *Client) GetTag(id string, fields string) (Tag, error) {
 		return tag, nil
 	}
 
-	// handle response.
+	// Handle response.
 	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 	return tag, err
@@ -789,7 +855,7 @@ func (c *Client) GetNotesByTag(id string, orderBy string, orderDir string) ([]No
 			}
 		}
 
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 		return notes, err
@@ -849,7 +915,7 @@ func (c *Client) GetAllNotes(fields string, orderBy string, orderDir string) ([]
 			}
 		}
 
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 		return notes, err
@@ -910,7 +976,7 @@ func (c *Client) GetNotesInFolder(id string, fields string, orderBy string, orde
 			}
 		}
 
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 		return notes, err
@@ -970,7 +1036,7 @@ func (c *Client) GetAllFolders(fields string, orderBy string, orderDir string) (
 			}
 		}
 
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 		return folders, err
@@ -1042,7 +1108,7 @@ func (c *Client) GetAllTags(orderBy string, orderDir string) ([]Tag, error) {
 		}
 
 		if resp.IsError() {
-			// handle response.
+			// Handle response.
 			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
 
 			return tags, err
@@ -1064,7 +1130,7 @@ func (c *Client) GetAllTags(orderBy string, orderDir string) ([]Tag, error) {
 			}
 		}
 
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 		return tags, err
@@ -1081,7 +1147,7 @@ func (c *Client) DeleteTag(id string) error {
 	}
 
 	if resp.IsError() {
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
 
 		return err
@@ -1091,7 +1157,7 @@ func (c *Client) DeleteTag(id string) error {
 		return nil
 	}
 
-	// handle response.
+	// Handle response.
 	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 	return err
@@ -1108,7 +1174,7 @@ func (c *Client) DeleteTagFromNote(tagID string, noteID string) error {
 	}
 
 	if resp.IsError() {
-		// handle response.
+		// Handle response.
 		err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
 
 		return err
@@ -1118,10 +1184,70 @@ func (c *Client) DeleteTagFromNote(tagID string, noteID string) error {
 		return nil
 	}
 
-	// handle response.
+	// Handle response.
 	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
 	return err
+}
+
+func (c *Client) Search(query string, queryType string, fields string) ([]Item, error) {
+	var result searchResult
+	var items []Item
+
+	page := 1
+
+	queryParams := map[string]string{
+		"token": c.apiToken,
+		"page":  strconv.Itoa(page),
+		"query": query,
+	}
+
+	if len(queryType) != 0 {
+		queryParams["type"] = queryType
+	}
+
+	if len(fields) != 0 {
+		queryParams["fields"] = fields
+	}
+
+	for {
+		resp, err := c.handle.R().
+			SetQueryParams(queryParams).
+			SetResult(&result).
+			SetError(&result).
+			Get(fmt.Sprintf("http://localhost:%d/search", c.port))
+		if err != nil {
+			return items, err
+		}
+
+		if resp.IsError() {
+			// Handle response.
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+			return items, err
+		}
+
+		if resp.IsSuccess() {
+			for _, item := range result.Items {
+				items = append(items, item)
+			}
+
+			if result.HasMore {
+				page++
+
+				queryParams["page"] = strconv.Itoa(page)
+
+				continue
+			}
+
+			return items, nil
+		}
+
+		// Handle response.
+		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+		return items, err
+	}
 }
 
 func (c *Client) GetApiToken() string {

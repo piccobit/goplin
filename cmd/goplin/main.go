@@ -14,9 +14,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-type CliContext struct {
-	Debug    bool
-	NoHeader bool
+type Globals struct {
+	Debug bool `help:"Enable debug output."`
 }
 
 type ListTagsCmd struct {
@@ -27,7 +26,7 @@ type ListTagsCmd struct {
 	OrderBy        string `name:"order-by" help:"Order by specified field."`
 	OrderDir       string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
-	IDs []string `arg:"" optional:"" name:"id" help:"List tags with the specified IDs."`
+	IDs []string `arg optional name:"id" help:"List tags with the specified IDs."`
 }
 
 type ListNotesCmd struct {
@@ -38,7 +37,7 @@ type ListNotesCmd struct {
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
-	IDs []string `arg:"" optional:"" name:"id" help:"List notes with the specified IDs or tag IDs."`
+	IDs []string `arg optional name:"id" help:"List notes with the specified IDs or tag IDs."`
 }
 
 type ListFoldersCmd struct {
@@ -47,66 +46,54 @@ type ListFoldersCmd struct {
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
-	IDs []string `arg:"" optional:"" name:"id" help:"List folders with the specified IDs or tag IDs."`
+	IDs []string `arg optional name:"id" help:"List folders with the specified IDs or tag IDs."`
 }
 
 type DeleteTagsCmd struct {
-	IDs []string `arg:"" name:"id" help:"Delete tags with the specified IDs."`
+	IDs []string `arg name:"id" help:"Delete tags with the specified IDs."`
 }
 
 type DeleteTagFromNoteCmd struct {
 	TagID struct {
-		TagID string `arg:""`
+		TagID string `arg`
 		From  struct {
 			NoteID struct {
-				NoteID string `arg:""`
-			} `arg:""`
-		} `cmd:""`
-	} `arg:""`
+				NoteID string `arg`
+			} `arg`
+		} `cmd`
+	} `arg`
 }
 
-var cli struct {
-	Debug bool `help:"Enable debug mode."`
+type SearchCmd struct {
+	NoHeader bool   `help:"Do not print header."`
+	Fields   string `help:"Show only the specified fields."`
+	Type     string `help:"Search for specified type"`
+
+	Query string `arg name:"query" help:"Search query (for details see https://joplinapp.org/help/#searching)."`
+}
+
+type CLI struct {
+	Globals
 
 	List struct {
-		Tags    ListTagsCmd    `cmd:"" requires:"" help:"List tags."`
-		Notes   ListNotesCmd   `cmd:"" requires:"" help:"List notes."`
-		Folders ListFoldersCmd `cmd:"" requires:"" help:"List folders."`
-	} `cmd:"" help:"Joplin list commands."`
+		Tags    ListTagsCmd    `cmd requires help:"List tags."`
+		Notes   ListNotesCmd   `cmd requires help:"List notes."`
+		Folders ListFoldersCmd `cmd requires help:"List folders."`
+	} `cmd help:"Joplin list commands."`
 
 	Delete struct {
-		Tags DeleteTagsCmd        `cmd:"" requires:"" help:"Delete tags."`
-		Tag  DeleteTagFromNoteCmd `cmd:"" requires:"" help:"Delete tag from note."`
-	} `cmd:"" help:"Joplin delete commands."`
+		Tags DeleteTagsCmd        `cmd requires help:"Delete tags."`
+		Tag  DeleteTagFromNoteCmd `cmd requires help:"Delete tag from note."`
+	} `cmd help:"Joplin delete commands."`
+
+	Search SearchCmd `cmd help:"Joplin search command."`
 }
 
 var (
 	client *goplin.Client
 )
 
-func getItemTypes() []string {
-	return []string{
-		"unknown",
-		"note",
-		"folder",
-		"setting",
-		"resource",
-		"tag",
-		"note_tag",
-		"search",
-		"alarm",
-		"master_key",
-		"item_change",
-		"note_resource",
-		"resource_local_state",
-		"revision",
-		"migration",
-		"smart_filter",
-		"command",
-	}
-}
-
-func (cmd *ListTagsCmd) Run(ctx *CliContext) error {
+func (cmd *ListTagsCmd) Run(ctx *Globals) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
@@ -169,10 +156,10 @@ func (cmd *ListTagsCmd) Run(ctx *CliContext) error {
 
 					if len(notes) == 0 {
 						orphansFound++
-						PrintCells(tag, cmd.Fields, &goplin.TagFormats)
+						PrintRow(tag, cmd.Fields, &goplin.TagFormats)
 					}
 				} else {
-					PrintCells(tag, cmd.Fields, &goplin.TagFormats)
+					PrintRow(tag, cmd.Fields, &goplin.TagFormats)
 				}
 			}
 
@@ -188,7 +175,7 @@ func (cmd *ListTagsCmd) Run(ctx *CliContext) error {
 			if err != nil {
 				fmt.Printf("%-32s <= ERROR: tag not found\n", id)
 			} else {
-				PrintCells(tag, cmd.Fields, &goplin.TagFormats)
+				PrintRow(tag, cmd.Fields, &goplin.TagFormats)
 			}
 		}
 	}
@@ -196,7 +183,7 @@ func (cmd *ListTagsCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
+func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 	var err error
 	var notes []goplin.Note
 
@@ -225,7 +212,7 @@ func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 		}
 
 		for _, note := range notes {
-			PrintCells(note, cmd.Fields, &goplin.NoteFormats)
+			PrintRow(note, cmd.Fields, &goplin.NoteFormats)
 		}
 	} else {
 		if strings.ToLower(cmd.By) == "tag" {
@@ -235,7 +222,7 @@ func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
 					for _, note := range notes {
-						PrintCells(note, cmd.Fields, &goplin.NoteFormats)
+						PrintRow(note, cmd.Fields, &goplin.NoteFormats)
 					}
 				}
 			}
@@ -245,7 +232,7 @@ func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 				if err != nil {
 					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
-					PrintCells(note, cmd.Fields, &goplin.NoteFormats)
+					PrintRow(note, cmd.Fields, &goplin.NoteFormats)
 				}
 
 			}
@@ -255,7 +242,7 @@ func (cmd *ListNotesCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (cmd *ListFoldersCmd) Run(ctx *CliContext) error {
+func (cmd *ListFoldersCmd) Run(ctx *Globals) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
@@ -276,7 +263,7 @@ func (cmd *ListFoldersCmd) Run(ctx *CliContext) error {
 		}
 
 		for _, folder := range folders {
-			PrintCells(folder, cmd.Fields, &goplin.NoteFormats)
+			PrintRow(folder, cmd.Fields, &goplin.NoteFormats)
 		}
 	} else {
 		for _, id := range cmd.IDs {
@@ -284,7 +271,7 @@ func (cmd *ListFoldersCmd) Run(ctx *CliContext) error {
 			if err != nil {
 				fmt.Printf("%-32s <= ERROR: folder not found\n", id)
 			} else {
-				PrintCells(note, cmd.Fields, &goplin.NoteFormats)
+				PrintRow(note, cmd.Fields, &goplin.NoteFormats)
 			}
 
 		}
@@ -293,7 +280,7 @@ func (cmd *ListFoldersCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (cmd *DeleteTagsCmd) Run(ctx *CliContext) error {
+func (cmd *DeleteTagsCmd) Run(ctx *Globals) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
@@ -311,7 +298,7 @@ func (cmd *DeleteTagsCmd) Run(ctx *CliContext) error {
 	return nil
 }
 
-func (cmd *DeleteTagFromNoteCmd) Run(ctx *CliContext) error {
+func (cmd *DeleteTagFromNoteCmd) Run(ctx *Globals) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
@@ -322,6 +309,32 @@ func (cmd *DeleteTagFromNoteCmd) Run(ctx *CliContext) error {
 		fmt.Printf("Could not find tag with ID '%s'\n", cmd.TagID)
 	} else {
 		fmt.Printf("Tag with ID '%s' deleted'\n", cmd.TagID)
+	}
+
+	return nil
+}
+
+func (cmd *SearchCmd) Run(ctx *Globals) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	if len(cmd.Fields) == 0 {
+		cmd.Fields = "id,parent_id,title"
+	}
+
+	if !cmd.NoHeader {
+		PrintHeader("Search", cmd.Fields, &goplin.SearchFormats)
+	}
+
+	items, err := client.Search(cmd.Query, cmd.Type, cmd.Fields)
+	if err != nil {
+		return fmt.Errorf("could not execute query '%s'\n", cmd.Query)
+	}
+
+	for _, item := range items {
+		PrintRow(item, cmd.Fields, &goplin.SearchFormats)
 	}
 
 	return nil
@@ -344,18 +357,28 @@ func PrintHeader(title string, fields string, format *map[string]goplin.CellForm
 	fmt.Println()
 }
 
-func PrintCells(cell interface{}, fields string, format *map[string]goplin.CellFormat) {
+func PrintRow(cell interface{}, fields string, format *map[string]goplin.CellFormat) {
 
 	columns := strings.Split(fields, ",")
 
 	for i, column := range columns {
 		value := reflect.ValueOf(cell)
 		cf := (*format)[column]
+		vof := value.FieldByName(cf.Field)
+
+		var s string
+
 		if i == 0 {
-			fmt.Printf(cf.Format, value.FieldByName(cf.Field))
+			s = fmt.Sprintf(cf.Format, vof)
 		} else {
-			fmt.Printf(" \u2502 "+cf.Format, value.FieldByName(cf.Field))
+			s = fmt.Sprintf(" \u2502 "+cf.Format, vof)
 		}
+
+		if vof.Kind() == reflect.String {
+			s = strings.TrimSuffix(s, "\n")
+		}
+
+		fmt.Printf("%s", s)
 	}
 
 	fmt.Println()
@@ -393,7 +416,11 @@ func main() {
 		}
 	}
 
+	cli := CLI{
+		Globals: Globals{},
+	}
+
 	ctx := kong.Parse(&cli)
-	err = ctx.Run(&CliContext{Debug: cli.Debug})
+	err = ctx.Run(&cli.Globals)
 	ctx.FatalIfErrorf(err)
 }

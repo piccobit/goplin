@@ -75,10 +75,10 @@ type SearchCmd struct {
 type CreateNoteCmd struct {
 	Format string `help:"Format of the new note: Markdown or HTML"`
 
-	Title    string   `arg name:"title" help:"Title of the new note"`
-	Body     string   `arg name:"body" help:"Body of the new note"`
-	Notebook string   `arg name:"notebook" help:"Name of the notebook to store the note in"`
-	Tags     []string `arg optional name:"tags" help:"Tags to attach to the new note"`
+	Title    string   `arg name:"title" help:"Title of the new note."`
+	Body     string   `arg name:"body" help:"Body of the new note. Prefixing the string with a '@' will read the body from the given file."`
+	Notebook string   `arg name:"notebook" help:"Name of the notebook to store the note in."`
+	Tags     []string `arg optional name:"tags" help:"Tags to attach to the new note."`
 }
 
 type CLI struct {

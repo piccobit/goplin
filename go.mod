@@ -3,8 +3,10 @@ module github.com/piccobit/goplin
 go 1.19
 
 require (
+	github.com/a8m/envsubst v1.3.0
 	github.com/alecthomas/kong v0.6.1
 	github.com/imroc/req/v3 v3.22.0
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/spf13/viper v1.13.0
 )
 

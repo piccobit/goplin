@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/a8m/envsubst"
 	"github.com/imroc/req/v3"
+	"github.com/mitchellh/go-homedir"
 )
 
 type Client struct {
@@ -1287,6 +1290,37 @@ func (c *Client) CreateNote(title string, format NoteFormat, body string, notebo
 
 	if len(items) != 1 {
 		return fmt.Errorf("could not find notebook called '%s'", notebook)
+	}
+
+	// Check if the body is stored in a file.
+	if strings.HasPrefix(body, "@") {
+		filename := strings.TrimPrefix(body, "@")
+
+		filename, err = homedir.Expand(filename)
+		if err != nil {
+			return err
+		}
+
+		filename, err = envsubst.String(filename)
+		if err != nil {
+			return err
+		}
+
+		if fileInfo, err := os.Stat(filename); err != nil {
+			return fmt.Errorf("file '%s' does not exist", filename)
+		} else {
+			if fileInfo.IsDir() {
+				return fmt.Errorf("filename '%s' is a directory", filename)
+			}
+
+			fileContent, err := os.ReadFile(filename)
+			if err != nil {
+				return err
+			}
+
+			body = string(fileContent)
+		}
+
 	}
 
 	var data map[string]string

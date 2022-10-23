@@ -3,6 +3,7 @@
 package goplin
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -68,7 +69,7 @@ type Note struct {
 	Type                 int     `json:"type_,omitempty"`
 }
 
-type Folder struct {
+type Notebook struct {
 	ID                      string `json:"id"`
 	ParentID                string `json:"parent_id"`
 	Title                   string `json:"title"`
@@ -123,9 +124,9 @@ type notesResult struct {
 	HasMore bool   `json:"has_more"`
 }
 
-type foldersResult struct {
-	Items   []Folder `json:"items"`
-	HasMore bool     `json:"has_more"`
+type notebooksResult struct {
+	Items   []Notebook `json:"items"`
+	HasMore bool       `json:"has_more"`
 }
 
 type Item struct {
@@ -167,6 +168,14 @@ const (
 	ItemTypeMigration          = "migration"
 	ItemTypeSmartFilter        = "smart_filter"
 	ItemTypeCommand            = "command"
+)
+
+type NoteFormat int
+
+const (
+	Undefined NoteFormat = iota
+	Markdown
+	HTML
 )
 
 var ItemTypes = []string{
@@ -487,7 +496,7 @@ var ResourceFormats = map[string]CellFormat{
 	},
 }
 
-var FolderFormats = map[string]CellFormat{
+var NotebookFormats = map[string]CellFormat{
 	"id": {
 		"ID",
 		"ID",
@@ -922,7 +931,7 @@ func (c *Client) GetAllNotes(fields string, orderBy string, orderDir string) ([]
 	}
 }
 
-func (c *Client) GetNotesInFolder(id string, fields string, orderBy string, orderDir string) ([]Note, error) {
+func (c *Client) GetNotesInNotebook(id string, fields string, orderBy string, orderDir string) ([]Note, error) {
 	var result notesResult
 	var notes []Note
 
@@ -983,9 +992,9 @@ func (c *Client) GetNotesInFolder(id string, fields string, orderBy string, orde
 	}
 }
 
-func (c *Client) GetAllFolders(fields string, orderBy string, orderDir string) ([]Folder, error) {
-	var result foldersResult
-	var folders []Folder
+func (c *Client) GetAllNotebooks(fields string, orderBy string, orderDir string) ([]Notebook, error) {
+	var result notebooksResult
+	var notebooks []Notebook
 
 	page := 1
 
@@ -1010,19 +1019,19 @@ func (c *Client) GetAllFolders(fields string, orderBy string, orderDir string) (
 			SetError(&result).
 			Get(fmt.Sprintf("http://localhost:%d/folders", c.port))
 		if err != nil {
-			return folders, err
+			return notebooks, err
 		}
 
 		if resp.IsError() {
 			// Handle response.
 			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
 
-			return folders, err
+			return notebooks, err
 		}
 
 		if resp.IsSuccess() {
-			for _, folder := range result.Items {
-				folders = append(folders, folder)
+			for _, notebook := range result.Items {
+				notebooks = append(notebooks, notebook)
 			}
 
 			if result.HasMore {
@@ -1032,49 +1041,49 @@ func (c *Client) GetAllFolders(fields string, orderBy string, orderDir string) (
 
 				continue
 			} else {
-				return folders, nil
+				return notebooks, nil
 			}
 		}
 
 		// Handle response.
 		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
-		return folders, err
+		return notebooks, err
 	}
 }
 
-func (c *Client) GetFolder(id string, fields string) (Folder, error) {
-	var folder Folder
+func (c *Client) GetNotebook(id string, fields string) (Notebook, error) {
+	var notebook Notebook
 
 	resp, err := c.handle.R().
 		SetPathParam("id", id).
 		SetQueryParam("token", c.apiToken).
 		SetQueryParam("fields", fields).
-		SetResult(&folder).
-		SetError(&folder).
+		SetResult(&notebook).
+		SetError(&notebook).
 		Get(fmt.Sprintf("http://localhost:%d/folders/{id}", c.port))
 	if err != nil {
-		return folder, err
+		return notebook, err
 	}
 
 	if resp.IsError() {
 		if resp.StatusCode == 404 {
-			err = fmt.Errorf("could not find folder with ID '%s", id)
+			err = fmt.Errorf("could not find notebook with ID '%s'", id)
 		} else {
 			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
 		}
 
-		return folder, err
+		return notebook, err
 	}
 
 	if resp.IsSuccess() {
-		return folder, nil
+		return notebook, nil
 	}
 
 	// Handle response.
 	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 
-	return folder, err
+	return notebook, err
 }
 
 func (c *Client) GetAllTags(orderBy string, orderDir string) ([]Tag, error) {
@@ -1252,4 +1261,152 @@ func (c *Client) Search(query string, queryType string, fields string) ([]Item, 
 
 func (c *Client) GetApiToken() string {
 	return c.apiToken
+}
+
+func (nf NoteFormat) String() string {
+	switch nf {
+	case Markdown:
+		return "Markdown"
+	case HTML:
+		return "HTML"
+	}
+
+	return "unknown"
+}
+
+func (c *Client) CreateNote(title string, format NoteFormat, body string, notebook string, tags []string) error {
+	if format == Undefined {
+		return fmt.Errorf("unknown note format")
+	}
+
+	// We've to get the ID of the notebook first.
+	items, err := c.Search(notebook, "folder", "")
+	if err != nil {
+		return err
+	}
+
+	if len(items) != 1 {
+		return fmt.Errorf("could not find notebook called '%s'", notebook)
+	}
+
+	var data map[string]string
+
+	if format == Markdown {
+		data = map[string]string{
+			"title": title,
+			"body":  body,
+		}
+	} else {
+		data = map[string]string{
+			"title":     title,
+			"body_html": body,
+		}
+	}
+
+	queryParams := map[string]string{
+		"token": c.apiToken,
+	}
+
+	resp, err := c.handle.R().
+		SetQueryParams(queryParams).
+		SetBody(data).
+		Post(fmt.Sprintf("http://localhost:%d/notes", c.port))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		// Handle response.
+		err = fmt.Errorf("got error response:\n%s\n%s", resp.Status, resp.Dump())
+
+		return err
+	}
+
+	if resp.IsSuccess() {
+		// Ok, we've successfully generated the note, next step is adding the specified tags.
+
+		var note Note
+
+		err := json.Unmarshal(resp.Bytes(), &note)
+		if err != nil {
+			return err
+		}
+
+		for _, tag := range tags {
+			items, err := c.Search(tag, "tag", "")
+			if err != nil {
+				return err
+			}
+
+			if len(items) != 1 {
+				return fmt.Errorf("could not find tag called '%s'", tag)
+			}
+
+			err = c.AddTagToNote(items[0].ID, note)
+			if err != nil {
+				return err
+			}
+		}
+
+		return c.MoveNoteToNotebook(note, items[0].ID)
+	}
+
+	// Handle response.
+	return fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+}
+
+func (c *Client) MoveNoteToNotebook(note Note, notebook string) error {
+	queryParams := map[string]string{
+		"token": c.apiToken,
+	}
+
+	note.ParentID = notebook
+
+	resp, err := c.handle.R().
+		SetPathParam("id", note.ID).
+		SetQueryParams(queryParams).
+		SetBody(note).
+		Put(fmt.Sprintf("http://localhost:%d/notes/{id}", c.port))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		// Handle response.
+		return fmt.Errorf("got error response:\n%s\n%s", resp.Status, resp.Dump())
+	}
+
+	if resp.IsSuccess() {
+		return nil
+	}
+
+	// Handle response.
+	return fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+}
+
+func (c *Client) AddTagToNote(tagID string, note Note) error {
+	queryParams := map[string]string{
+		"token": c.apiToken,
+	}
+
+	resp, err := c.handle.R().
+		SetPathParam("id", tagID).
+		SetQueryParams(queryParams).
+		SetBody(note).
+		Post(fmt.Sprintf("http://localhost:%d/tags/{id}/notes", c.port))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		// Handle response.
+		return fmt.Errorf("got error response:\n%s\n%s", resp.Status, resp.Dump())
+	}
+
+	if resp.IsSuccess() {
+		return nil
+	}
+
+	// Handle response.
+	return fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
 }

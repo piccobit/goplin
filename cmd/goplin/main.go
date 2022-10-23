@@ -33,20 +33,20 @@ type ListNotesCmd struct {
 	NoHeader bool   `help:"Do not print header."`
 	Fields   string `help:"Show only the specified fields."`
 	By       string `name:"by" help:"Find by ID or tag."`
-	In       string `name:"in" help:"Find notes in specified folder"`
+	In       string `name:"in" help:"Find notes in specified notebook"`
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
 	IDs []string `arg optional name:"id" help:"List notes with the specified IDs or tag IDs."`
 }
 
-type ListFoldersCmd struct {
+type ListNotebooksCmd struct {
 	NoHeader bool   `help:"Do not print header."`
 	Fields   string `help:"Show only the specified fields."`
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
-	IDs []string `arg optional name:"id" help:"List folders with the specified IDs or tag IDs."`
+	IDs []string `arg optional name:"id" help:"List notebooks with the specified IDs or tag IDs."`
 }
 
 type DeleteTagsCmd struct {
@@ -72,13 +72,22 @@ type SearchCmd struct {
 	Query string `arg name:"query" help:"Search query (for details see https://joplinapp.org/help/#searching)."`
 }
 
+type CreateNoteCmd struct {
+	Format string `help:"Format of the new note: Markdown or HTML"`
+
+	Title    string   `arg name:"title" help:"Title of the new note"`
+	Body     string   `arg name:"body" help:"Body of the new note"`
+	Notebook string   `arg name:"notebook" help:"Name of the notebook to store the note in"`
+	Tags     []string `arg optional name:"tags" help:"Tags to attach to the new note"`
+}
+
 type CLI struct {
 	Globals
 
 	List struct {
-		Tags    ListTagsCmd    `cmd requires help:"List tags."`
-		Notes   ListNotesCmd   `cmd requires help:"List notes."`
-		Folders ListFoldersCmd `cmd requires help:"List folders."`
+		Tags      ListTagsCmd      `cmd requires help:"List tags."`
+		Notes     ListNotesCmd     `cmd requires help:"List notes."`
+		Notebooks ListNotebooksCmd `cmd requires help:"List notebooks."`
 	} `cmd help:"Joplin list commands."`
 
 	Delete struct {
@@ -87,6 +96,10 @@ type CLI struct {
 	} `cmd help:"Joplin delete commands."`
 
 	Search SearchCmd `cmd help:"Joplin search command."`
+
+	Create struct {
+		Note CreateNoteCmd `cmd requires help:"Create note."`
+	} `cmd help:"Joplin create commands."`
 }
 
 var (
@@ -204,7 +217,7 @@ func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 		if len(cmd.In) == 0 {
 			notes, err = client.GetAllNotes(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
 		} else {
-			notes, err = client.GetNotesInFolder(cmd.In, cmd.Fields, cmd.OrderBy, cmd.OrderDir)
+			notes, err = client.GetNotesInNotebook(cmd.In, cmd.Fields, cmd.OrderBy, cmd.OrderDir)
 		}
 
 		if err != nil {
@@ -242,7 +255,7 @@ func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 	return nil
 }
 
-func (cmd *ListFoldersCmd) Run(ctx *Globals) error {
+func (cmd *ListNotebooksCmd) Run(ctx *Globals) error {
 	if ctx.Debug {
 		req.EnableDumpAll()
 		req.EnableDebugLog()
@@ -253,23 +266,23 @@ func (cmd *ListFoldersCmd) Run(ctx *Globals) error {
 	}
 
 	if !cmd.NoHeader {
-		PrintHeader("Folders", cmd.Fields, &goplin.FolderFormats)
+		PrintHeader("Notebooks", cmd.Fields, &goplin.NotebookFormats)
 	}
 
 	if len(cmd.IDs) == 0 {
-		folders, err := client.GetAllFolders(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
+		notebooks, err := client.GetAllNotebooks(cmd.Fields, cmd.OrderBy, cmd.OrderDir)
 		if err != nil {
 			return err
 		}
 
-		for _, folder := range folders {
-			PrintRow(folder, cmd.Fields, &goplin.NoteFormats)
+		for _, notebook := range notebooks {
+			PrintRow(notebook, cmd.Fields, &goplin.NoteFormats)
 		}
 	} else {
 		for _, id := range cmd.IDs {
-			note, err := client.GetFolder(id, cmd.Fields)
+			note, err := client.GetNotebook(id, cmd.Fields)
 			if err != nil {
-				fmt.Printf("%-32s <= ERROR: folder not found\n", id)
+				fmt.Printf("%-32s <= ERROR: notebook not found\n", id)
 			} else {
 				PrintRow(note, cmd.Fields, &goplin.NoteFormats)
 			}
@@ -338,6 +351,26 @@ func (cmd *SearchCmd) Run(ctx *Globals) error {
 	}
 
 	return nil
+}
+
+func (cmd *CreateNoteCmd) Run(ctx *Globals) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	format := goplin.Undefined
+
+	switch strings.ToLower(cmd.Format) {
+	default:
+		fallthrough
+	case "markdown":
+		format = goplin.Markdown
+	case "html":
+		format = goplin.HTML
+	}
+
+	return client.CreateNote(cmd.Title, format, cmd.Body, cmd.Notebook, cmd.Tags)
 }
 
 func PrintHeader(title string, fields string, format *map[string]goplin.CellFormat) {

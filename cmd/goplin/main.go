@@ -455,7 +455,20 @@ func main() {
 
 	if len(apiToken) == 0 {
 		viper.Set("api_token", client.GetApiToken())
-		err = viper.WriteConfigAs(path.Join(os.Getenv("HOME"), ".goplin"))
+
+		userHomeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		configFilePath := path.Join(userHomeDir, ".goplin")
+
+		err = viper.WriteConfigAs(configFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = os.Chmod(configFilePath, 0600)
 		if err != nil {
 			log.Fatal(err)
 		}

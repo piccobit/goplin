@@ -91,12 +91,13 @@ type Notebook struct {
 
 type Resource struct {
 	ID                      string `json:"id"`
-	ParentID                string `json:"parent_id"`
 	Title                   string `json:"title"`
 	Mime                    string `json:"mime,omitempty"`
 	Filename                string `json:"filename,omitempty"`
 	CreatedTime             int    `json:"created_time,omitempty"`
 	UpdatedTime             int    `json:"updated_time,omitempty"`
+	UserCreatedTime         int    `json:"user_created_time,omitempty"`
+	UserUpdatedTime         int    `json:"user_updated_time,omitempty"`
 	FileExtension           string `json:"file_extension,omitempty"`
 	EncryptionCipherText    string `json:"encryption_cipher_text,omitempty"`
 	EncryptionApplied       int    `json:"encryption_applied,omitempty"`
@@ -129,6 +130,11 @@ type notesResult struct {
 
 type notebooksResult struct {
 	Items   []Notebook `json:"items"`
+	HasMore bool       `json:"has_more"`
+}
+
+type resourcesResult struct {
+	Items   []Resource `json:"items"`
 	HasMore bool       `json:"has_more"`
 }
 
@@ -1443,4 +1449,99 @@ func (c *Client) AddTagToNote(tagID string, note Note) error {
 
 	// Handle response.
 	return fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+}
+
+func (c *Client) GetAllResources(orderBy string, orderDir string) ([]Resource, error) {
+	var result resourcesResult
+	var resources []Resource
+
+	page := 1
+
+	queryParams := map[string]string{
+		"token":  c.apiToken,
+		"fields": "id,title",
+		"page":   strconv.Itoa(page),
+	}
+
+	if len(orderBy) != 0 {
+		queryParams["order_by"] = orderBy
+	}
+
+	if len(orderDir) != 0 {
+		queryParams["order_dir"] = strings.ToUpper(orderDir)
+	}
+
+	for {
+		resp, err := c.handle.R().
+			SetQueryParams(queryParams).
+			SetResult(&result).
+			SetError(&result).
+			Get(fmt.Sprintf("http://localhost:%d/resources/", c.port))
+		if err != nil {
+			return resources, err
+		}
+
+		if resp.IsError() {
+			// Handle response.
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+
+			return resources, err
+		}
+
+		if resp.IsSuccess() {
+			for _, resource := range result.Items {
+				resources = append(resources, resource)
+			}
+
+			if result.HasMore {
+				page++
+
+				queryParams["page"] = strconv.Itoa(page)
+
+				continue
+			} else {
+				return resources, nil
+			}
+		}
+
+		// Handle response.
+		err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+		return resources, err
+	}
+}
+
+func (c *Client) GetResource(id string, fields string) (Resource, error) {
+	var resource Resource
+
+	resp, err := c.handle.R().
+		SetPathParam("id", id).
+		SetQueryParam("token", c.apiToken).
+		SetQueryParam("fields", fields).
+		SetResult(&resource).
+		SetError(&resource).
+		Get(fmt.Sprintf("http://localhost:%d/tags/{id}", c.port))
+	if err != nil {
+		return resource, err
+	}
+
+	if resp.IsError() {
+		if resp.StatusCode == 404 {
+			err = fmt.Errorf("could not find tag with IDs '%s", id)
+
+		} else {
+			err = fmt.Errorf("got error response, raw dump:\n%s", resp.Dump())
+		}
+
+		return resource, err
+	}
+
+	if resp.IsSuccess() {
+		return resource, nil
+	}
+
+	// Handle response.
+	err = fmt.Errorf("got unexpected response, raw dump:\n%s", resp.Dump())
+
+	return resource, err
 }

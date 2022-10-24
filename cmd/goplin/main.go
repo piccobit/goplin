@@ -81,6 +81,17 @@ type CreateNoteCmd struct {
 	Tags     []string `arg optional name:"tags" help:"Tags to attach to the new note."`
 }
 
+type ListResourcesCmd struct {
+	NoHeader       bool   `help:"Do not print header."`
+	Fields         string `help:"Show only the specified fields."`
+	DuplicatesOnly bool   `name:"duplicates-only" help:"List only duplicate tags."`
+	OrphansOnly    bool   `name:"orphans-only" help:"List only orphan tags."`
+	OrderBy        string `name:"order-by" help:"Order by specified field."`
+	OrderDir       string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
+
+	IDs []string `arg optional name:"id" help:"List resources with the specified IDs."`
+}
+
 type CLI struct {
 	Globals
 
@@ -88,6 +99,7 @@ type CLI struct {
 		Tags      ListTagsCmd      `cmd requires help:"List tags."`
 		Notes     ListNotesCmd     `cmd requires help:"List notes."`
 		Notebooks ListNotebooksCmd `cmd requires help:"List notebooks."`
+		Resources ListResourcesCmd `cmd requires help:"List resources."`
 	} `cmd help:"Joplin list commands."`
 
 	Delete struct {
@@ -456,4 +468,41 @@ func main() {
 	ctx := kong.Parse(&cli)
 	err = ctx.Run(&cli.Globals)
 	ctx.FatalIfErrorf(err)
+}
+
+func (cmd *ListResourcesCmd) Run(ctx *Globals) error {
+	if ctx.Debug {
+		req.EnableDumpAll()
+		req.EnableDebugLog()
+	}
+
+	if len(cmd.Fields) == 0 {
+		cmd.Fields = "id,title"
+	}
+
+	if !cmd.NoHeader {
+		PrintHeader("Tags", cmd.Fields, &goplin.ResourceFormats)
+	}
+
+	if len(cmd.IDs) == 0 {
+		resources, err := client.GetAllResources(cmd.OrderBy, cmd.OrderDir)
+		if err != nil {
+			return err
+		}
+
+		for _, resource := range resources {
+			PrintRow(resource, cmd.Fields, &goplin.ResourceFormats)
+		}
+	} else {
+		for _, id := range cmd.IDs {
+			resource, err := client.GetResource(id, cmd.Fields)
+			if err != nil {
+				fmt.Printf("%-32s <= ERROR: tag not found\n", id)
+			} else {
+				PrintRow(resource, cmd.Fields, &goplin.ResourceFormats)
+			}
+		}
+	}
+
+	return nil
 }

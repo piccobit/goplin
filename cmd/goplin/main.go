@@ -10,6 +10,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/imroc/req/v3"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/piccobit/goplin"
 	"github.com/spf13/viper"
 )
@@ -33,7 +34,7 @@ type ListNotesCmd struct {
 	NoHeader bool   `help:"Do not print header."`
 	Fields   string `help:"Show only the specified fields."`
 	By       string `name:"by" help:"Find by ID or tag."`
-	In       string `name:"in" help:"Find notes in specified notebook"`
+	In       string `name:"in" help:"Find notes in specified notebook ID"`
 	OrderBy  string `name:"order-by" help:"Order by specified field."`
 	OrderDir string `name:"order-dir" help:"Order by specified direction: ASC or DESC."`
 
@@ -124,13 +125,17 @@ func (cmd *ListTagsCmd) Run(ctx *Globals) error {
 		req.EnableDebugLog()
 	}
 
+	t := table.NewWriter()
+	t.SetStyle(table.StyleBold)
+	t.SetOutputMirror(os.Stdout)
+
 	if len(cmd.Fields) == 0 {
 		cmd.Fields = "id,parent_id,title"
 	}
 
 	if !cmd.NoHeader {
 		if !cmd.DuplicatesOnly {
-			PrintHeader("Tags", cmd.Fields, &goplin.TagFormats)
+			PrintTableHeader(t, "Tags", cmd.Fields)
 		}
 	}
 
@@ -181,10 +186,10 @@ func (cmd *ListTagsCmd) Run(ctx *Globals) error {
 
 					if len(notes) == 0 {
 						orphansFound++
-						PrintRow(tag, cmd.Fields, &goplin.TagFormats)
+						PrintTableRow(t, tag, cmd.Fields, &goplin.TagFormats)
 					}
 				} else {
-					PrintRow(tag, cmd.Fields, &goplin.TagFormats)
+					PrintTableRow(t, tag, cmd.Fields, &goplin.TagFormats)
 				}
 			}
 
@@ -200,10 +205,12 @@ func (cmd *ListTagsCmd) Run(ctx *Globals) error {
 			if err != nil {
 				fmt.Printf("%-32s <= ERROR: tag not found\n", id)
 			} else {
-				PrintRow(tag, cmd.Fields, &goplin.TagFormats)
+				PrintTableRow(t, tag, cmd.Fields, &goplin.TagFormats)
 			}
 		}
 	}
+
+	t.Render()
 
 	return nil
 }
@@ -217,12 +224,16 @@ func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 		req.EnableDebugLog()
 	}
 
+	t := table.NewWriter()
+	t.SetStyle(table.StyleBold)
+	t.SetOutputMirror(os.Stdout)
+
 	if len(cmd.Fields) == 0 {
 		cmd.Fields = "id,parent_id,title"
 	}
 
 	if !cmd.NoHeader {
-		PrintHeader("Notes", cmd.Fields, &goplin.NoteFormats)
+		PrintTableHeader(t, "Notes", cmd.Fields)
 	}
 
 	if len(cmd.IDs) == 0 {
@@ -237,7 +248,7 @@ func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 		}
 
 		for _, note := range notes {
-			PrintRow(note, cmd.Fields, &goplin.NoteFormats)
+			PrintTableRow(t, note, cmd.Fields, &goplin.NoteFormats)
 		}
 	} else {
 		if strings.ToLower(cmd.By) == "tag" {
@@ -247,7 +258,7 @@ func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
 					for _, note := range notes {
-						PrintRow(note, cmd.Fields, &goplin.NoteFormats)
+						PrintTableRow(t, note, cmd.Fields, &goplin.NoteFormats)
 					}
 				}
 			}
@@ -257,12 +268,14 @@ func (cmd *ListNotesCmd) Run(ctx *Globals) error {
 				if err != nil {
 					fmt.Printf("%-32s <= ERROR: note not found\n", id)
 				} else {
-					PrintRow(note, cmd.Fields, &goplin.NoteFormats)
+					PrintTableRow(t, note, cmd.Fields, &goplin.NoteFormats)
 				}
 
 			}
 		}
 	}
+
+	t.Render()
 
 	return nil
 }
@@ -273,12 +286,16 @@ func (cmd *ListNotebooksCmd) Run(ctx *Globals) error {
 		req.EnableDebugLog()
 	}
 
+	t := table.NewWriter()
+	t.SetStyle(table.StyleBold)
+	t.SetOutputMirror(os.Stdout)
+
 	if len(cmd.Fields) == 0 {
 		cmd.Fields = "id,parent_id,title"
 	}
 
 	if !cmd.NoHeader {
-		PrintHeader("Notebooks", cmd.Fields, &goplin.NotebookFormats)
+		PrintTableHeader(t, "Notebooks", cmd.Fields)
 	}
 
 	if len(cmd.IDs) == 0 {
@@ -288,7 +305,7 @@ func (cmd *ListNotebooksCmd) Run(ctx *Globals) error {
 		}
 
 		for _, notebook := range notebooks {
-			PrintRow(notebook, cmd.Fields, &goplin.NoteFormats)
+			PrintTableRow(t, notebook, cmd.Fields, &goplin.NoteFormats)
 		}
 	} else {
 		for _, id := range cmd.IDs {
@@ -296,11 +313,13 @@ func (cmd *ListNotebooksCmd) Run(ctx *Globals) error {
 			if err != nil {
 				fmt.Printf("%-32s <= ERROR: notebook not found\n", id)
 			} else {
-				PrintRow(note, cmd.Fields, &goplin.NoteFormats)
+				PrintTableRow(t, note, cmd.Fields, &goplin.NoteFormats)
 			}
 
 		}
 	}
+
+	t.Render()
 
 	return nil
 }
@@ -345,12 +364,16 @@ func (cmd *SearchCmd) Run(ctx *Globals) error {
 		req.EnableDebugLog()
 	}
 
+	t := table.NewWriter()
+	t.SetStyle(table.StyleBold)
+	t.SetOutputMirror(os.Stdout)
+
 	if len(cmd.Fields) == 0 {
 		cmd.Fields = "id,parent_id,title"
 	}
 
 	if !cmd.NoHeader {
-		PrintHeader("Search", cmd.Fields, &goplin.SearchFormats)
+		PrintTableHeader(t, "Search", cmd.Fields)
 	}
 
 	items, err := client.Search(cmd.Query, cmd.Type, cmd.Fields)
@@ -359,8 +382,10 @@ func (cmd *SearchCmd) Run(ctx *Globals) error {
 	}
 
 	for _, item := range items {
-		PrintRow(item, cmd.Fields, &goplin.SearchFormats)
+		PrintTableRow(t, item, cmd.Fields, &goplin.SearchFormats)
 	}
+
+	t.Render()
 
 	return nil
 }
@@ -385,48 +410,47 @@ func (cmd *CreateNoteCmd) Run(ctx *Globals) error {
 	return client.CreateNote(cmd.Title, format, cmd.Body, cmd.Notebook, cmd.Tags)
 }
 
-func PrintHeader(title string, fields string, format *map[string]goplin.CellFormat) {
-	fmt.Printf("%s:\n", title)
+func PrintTableHeader(t table.Writer, title string, fields string) {
+	t.SetTitle(title)
 
 	columns := strings.Split(fields, ",")
 
-	for i, column := range columns {
-		cf := (*format)[column]
-		if i == 0 {
-			fmt.Printf(cf.Format, cf.Name)
-		} else {
-			fmt.Printf(" \u2502 "+cf.Format, cf.Name)
-		}
+	row := make([]interface{}, len(columns))
+	for i := range columns {
+		row[i] = columns[i]
 	}
 
-	fmt.Println()
+	t.AppendHeader(row)
 }
 
-func PrintRow(cell interface{}, fields string, format *map[string]goplin.CellFormat) {
+func PrintTableRow(t table.Writer, cell interface{}, fields string, format *map[string]goplin.CellFormat) {
 
 	columns := strings.Split(fields, ",")
 
-	for i, column := range columns {
+	var columnValues []string
+
+	for _, column := range columns {
 		value := reflect.ValueOf(cell)
 		cf := (*format)[column]
 		vof := value.FieldByName(cf.Field)
 
 		var s string
 
-		if i == 0 {
-			s = fmt.Sprintf(cf.Format, vof)
-		} else {
-			s = fmt.Sprintf(" \u2502 "+cf.Format, vof)
-		}
+		s = fmt.Sprintf(cf.Format, vof)
 
 		if vof.Kind() == reflect.String {
 			s = strings.TrimSuffix(s, "\n")
 		}
 
-		fmt.Printf("%s", s)
+		columnValues = append(columnValues, s)
 	}
 
-	fmt.Println()
+	row := make([]interface{}, len(columnValues))
+	for i := range columnValues {
+		row[i] = columnValues[i]
+	}
+
+	t.AppendRow(row)
 }
 
 func main() {
@@ -493,8 +517,12 @@ func (cmd *ListResourcesCmd) Run(ctx *Globals) error {
 		cmd.Fields = "id,title"
 	}
 
+	t := table.NewWriter()
+	t.SetStyle(table.StyleBold)
+	t.SetOutputMirror(os.Stdout)
+
 	if !cmd.NoHeader {
-		PrintHeader("Tags", cmd.Fields, &goplin.ResourceFormats)
+		PrintTableHeader(t, "Resources", cmd.Fields)
 	}
 
 	if len(cmd.IDs) == 0 {
@@ -504,7 +532,7 @@ func (cmd *ListResourcesCmd) Run(ctx *Globals) error {
 		}
 
 		for _, resource := range resources {
-			PrintRow(resource, cmd.Fields, &goplin.ResourceFormats)
+			PrintTableRow(t, resource, cmd.Fields, &goplin.ResourceFormats)
 		}
 	} else {
 		for _, id := range cmd.IDs {
@@ -512,10 +540,12 @@ func (cmd *ListResourcesCmd) Run(ctx *Globals) error {
 			if err != nil {
 				fmt.Printf("%-32s <= ERROR: tag not found\n", id)
 			} else {
-				PrintRow(resource, cmd.Fields, &goplin.ResourceFormats)
+				PrintTableRow(t, resource, cmd.Fields, &goplin.ResourceFormats)
 			}
 		}
 	}
+
+	t.Render()
 
 	return nil
 }

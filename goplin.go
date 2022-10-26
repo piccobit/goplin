@@ -431,7 +431,7 @@ var ResourceFormats = map[string]CellFormat{
 	"title": {
 		"Title",
 		"Title",
-		"%-100.100s",
+		"%-80.80s",
 	},
 	"mime": {
 		"Mime",

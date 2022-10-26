@@ -6,6 +6,7 @@ require (
 	github.com/a8m/envsubst v1.3.0
 	github.com/alecthomas/kong v0.6.1
 	github.com/imroc/req/v3 v3.22.0
+	github.com/jedib0t/go-pretty/v6 v6.4.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/spf13/viper v1.13.0
 )
@@ -24,11 +25,13 @@ require (
 	github.com/marten-seemann/qtls-go1-17 v0.1.2 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.2 // indirect
 	github.com/marten-seemann/qtls-go1-19 v0.1.0-beta.1 // indirect
+	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
